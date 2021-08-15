@@ -1,0 +1,92 @@
+#if (!defined(__joint_settings)) && defined(__board_joint_h)
+#define __joint_settings
+#else
+#error error of using joint_settings.h
+#endif
+
+
+#if actuator_ps_POWER_SUPPLY_VOLTAGE_ENABLED
+
+
+#define actuator_ps_VOLTAGE_MIN_LIM MEXO_SIGNAL_MIN 
+#define actuator_ps_VOLTAGE_MAX_LIM  MEXO_SIGNAL_MAX
+#define actuator_ps_VOLTAGE_RAMP_GAIN 200
+#endif 
+
+#if actuator_ps_POWER_SUPPLY_CURRENT_MEASSURY_ENABLED == 1
+
+#if actuator_ps_POWER_SUPPLY_CURRENT_FILTER == 1
+#define actuator_ps_CURRENT_FILTER_SHIFT 4
+#define actuator_ps_CURRENT_FILTER_PRESC_SHIFT 4
+#define actuator_ps_CURRENT_FILTER_VALUE_SHIFT 4
+#endif 
+
+#define actuator_ps_CURRENT_MIN_LIM -500
+#define actuator_ps_CURRENT_MAX_LIM 500
+
+#if actuator_ps_POWER_SUPPLY_CURRENT_REGULATOR_ENABLED == 1
+#define actuator_ps_REGULATOR_PROP_GAIN          15
+#define actuator_ps_REGULATOR_MODEL_GAIN         25
+#define actuator_ps_REGULATOR_DIFF_GAIN          0
+#define actuator_ps_REGULATOR_CONTROL_SHIFT      0
+#define actuator_ps_REGULATOR_MODEL_SHIFT        8
+
+#endif
+#endif
+
+#if actuator_MOTOR_POSITION_ENABLED == 1
+
+
+
+#define actuator_MOTOR_POSITION_OFFSET 0L
+
+#if actuator_MOTOR_POSITION_INFINITE_ENABLED == 0
+#define actuator_MOTOR_POSITION_MIN -750000L
+#define actuator_MOTOR_POSITION_MAX 750000L
+#endif 
+
+#if actuator_MOTOR_POSITION_SPEED_FLT_ENABLED
+#define actuator_MOTOR_POSITION_SPED_FLT_SHIFT 5
+#define actuator_MOTOR_POSITION_SPED_FLT_PRESC_SHIFT 5
+#define actuator_MOTOR_POSITION_SPED_FLT_VALUE_SHIFT 0
+#endif
+
+#define actuator_MOTOR_SPEED_MAX_LIM 6000
+#define actuator_MOTOR_SPEED_OVER_VOLTAGE_CL_PROP_GAIN 300
+#define actuator_MOTOR_SPEED_OVER_VOLTAGE_CL_MODEL_GAIN 15
+#define actuator_MOTOR_SPEED_OVER_VOLTAGE_CL_DIFF_GAIN 0
+#define actuator_MOTOR_SPEED_OVER_VOLTAGE_CL_FORCE_GAIN 64
+#define actuator_MOTOR_SPEED_OVER_VOLTAGE_CL_FORCE_MAX 10000
+#define actuator_MOTOR_SPEED_OVER_VOLTAGE_CL_CONTROL_SHIFT 4
+#define actuator_MOTOR_SPEED_OVER_VOLTAGE_CL_MODEL_SHIFT 8
+#define actuator_MOTOR_SPEED_OVER_VOLTAGE_CL_LIMIT_GAIN 0
+#define actuator_MOTOR_SPEED_OVER_VOLTAGE_CL_LIMIT_GAIN_PRESC 0
+
+
+#define actuator_MOTOR_SPEED_OVER_CURRENT_PROP_GAIN 30
+#define actuator_MOTOR_SPEED_OVER_CURRENT_MODEL_GAIN 12
+#define actuator_MOTOR_SPEED_OVER_CURRENT_DIFF_GAIN 0
+#define actuator_MOTOR_SPEED_OVER_CURRENT_FORCE_GAIN 1
+#define actuator_MOTOR_SPEED_OVER_CURRENT_FORCE_MAX 50
+#define actuator_MOTOR_SPEED_OVER_CURRENT_CONTROL_SHIFT 7
+#define actuator_MOTOR_SPEED_OVER_CURRENT_MODEL_SHIFT 8
+#define actuator_MOTOR_SPEED_OVER_CURRENT_LIMIT_GAIN 0
+#define actuator_MOTOR_SPEED_OVER_CURRENT_LIMIT_GAIN_PRESC 0
+
+
+#define actuator_MOTOR_POSITION_OVER_VOLTAGE_CL_PROP_GAIN 50
+#define actuator_MOTOR_POSITION_OVER_VOLTAGE_CL_DIFF_GAIN 0
+#define actuator_MOTOR_POSITION_OVER_VOLTAGE_CL_QUARD_GAIN 0
+#define actuator_MOTOR_POSITION_OVER_VOLTAGE_CL_CONTROL_SHIFT 8
+#define actuator_MOTOR_POSITION_OVER_VOLTAGE_CL_DEAD_ZONE 1
+#define actuator_MOTOR_POSITION_OVER_VOLTAGE_CL_CRAW_SPEED 1
+
+#define actuator_MOTOR_POSITION_OVER_CURRENT_PROP_GAIN 3
+#define actuator_MOTOR_POSITION_OVER_CURRENT_DIFF_GAIN 0
+#define actuator_MOTOR_POSITION_OVER_CURRENT_QUARD_GAIN 0
+#define actuator_MOTOR_POSITION_OVER_CURRENT_CONTROL_SHIFT 8
+#define actuator_MOTOR_POSITION_OVER_CURRENT_DEAD_ZONE 40
+#define actuator_MOTOR_POSITION_OVER_CURRENT_CRAW_SPEED 10
+
+#endif
+

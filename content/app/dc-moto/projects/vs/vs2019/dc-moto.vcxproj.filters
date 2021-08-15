@@ -1,0 +1,96 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="app">
+      <UniqueIdentifier>{61556e33-021c-41c7-bd86-dfd3a3af7982}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="app\common">
+      <UniqueIdentifier>{17b7ce7e-d860-4780-8e40-95535cea3cd7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="app\platform">
+      <UniqueIdentifier>{fff4ee9a-b845-4b21-96c8-e1cdccab9408}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="app\common\vercion">
+      <UniqueIdentifier>{aa2adaa0-c2a6-4cce-bc84-9107f51a5add}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="app\common\vercion\default">
+      <UniqueIdentifier>{0dc06122-fc97-4c5c-a525-8ce34aacc5d5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="robosd/mexo/board">
+      <UniqueIdentifier>{f0b7d466-9855-4453-8e74-1b7e13a10281}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="im">
+      <UniqueIdentifier>{0c8e1549-1016-4639-8929-2a08e73f40e7}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\source\platform\im\dc-moto_emu.cpp">
+      <Filter>app\platform</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\common\dc-moto.cpp">
+      <Filter>app\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\common\dc-moto.flow.proto.cpp">
+      <Filter>app\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\source\common\robosd.cpp">
+      <Filter>app\common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\reference\robosd-ref\mexo\board\dcmoto\dcmoto_joint.cpp">
+      <Filter>robosd/mexo/board</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\reference\robosd-ref\im\models\dcmachine.cpp">
+      <Filter>im</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\..\..\reference\robosd-ref\mexo\board\board+flow+uart+can-rev3.cpp">
+      <Filter>robosd/mexo/board</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\source\common\vercion\default\board_options.h">
+      <Filter>app\common\vercion\default</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\source\common\robosd.hpp">
+      <Filter>app\common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\source\common\board.flow.common.h">
+      <Filter>app\common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\source\common\board.flow.tuning.h">
+      <Filter>app\common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\source\common\board_common.h">
+      <Filter>app\common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\source\common\joint_config.h">
+      <Filter>app\common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\source\common\joint_settings.h">
+      <Filter>app\common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\source\common\dc-moto.flow.proto.h">
+      <Filter>app\common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\source\common\dc-moto.hpp">
+      <Filter>app\common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\reference\robosd-ref\mexo\board\dcmoto\dcmoto_joint.hpp">
+      <Filter>robosd/mexo/board</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\reference\robosd-ref\im\models\dcmachine.hpp">
+      <Filter>im</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\source\platform\im\free_master_cfg_tuning.h">
+      <Filter>app\platform</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\source\platform\im\mexo_options.h">
+      <Filter>app\platform</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\source\platform\im\robosd_app_tuning.h">
+      <Filter>app\platform</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\reference\robosd-ref\mexo\board\board+flow+uart+can-rev3.hpp">
+      <Filter>robosd/mexo/board</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
