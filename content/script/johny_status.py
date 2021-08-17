@@ -1,7 +1,7 @@
 import serial
 import json
 import time
-ser = serial.Serial('COM11', 9600, timeout=1, rtscts=1)
+ser = serial.Serial('COM11', 115200, timeout=1, rtscts=0)
 
 print(ser)
 					
@@ -17,7 +17,6 @@ b_str = bytes(j_str.encode('ascii'))
 ser.write(b_str)     # write a string
 line = ser.readline()
 print(line)
-time.sleep(0.1)
 ser.close()  
 					
 					

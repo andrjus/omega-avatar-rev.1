@@ -110,7 +110,7 @@ int main(void)
 	
 	
   /* USER CODE BEGIN 2 */
-	while(!usb_rx_flag);
+	//while(!usb_rx_flag);
 	if ( avatar_central_begin() !=0 ) avatar_central_finish();
   /* USER CODE END 2 */
 

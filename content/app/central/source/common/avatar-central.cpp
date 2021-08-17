@@ -161,7 +161,7 @@ namespace avatar{
 
 						if ( power_.try_post(0, startup_confirm_)  != robo::result::complete ) return ;
 						
-						if( home_offset_.try_post(homing_ofset,startup_confirm_) != robo::result::complete  )return ;
+					//	if( home_offset_.try_post(homing_ofset,startup_confirm_) != robo::result::complete  )return ;
 						
 						if( position_min_.conv() && position_min_.conv()->scale() >0 ){
 							if ( position_min_.try_post_min(startup_confirm_)  != robo::result::complete ) return ;
@@ -462,9 +462,9 @@ namespace avatar{
 		#endif
 				
 			out_msg_.position_2 = (uint16_t)(converters.position->to_u32(actual.action.position) >> 1);
-			out_msg_.current_16 = ( 1800 >> 4); 
+			out_msg_.current_16 = 127; 
 			out_msg_.voltage_256 = 127;
-			out_msg_.speed_4 = ( (uint16_t)(speed_max/5) >> 2);// 1/5 от скорости 
+			out_msg_.speed_4 =  ((uint16_t)(speed_max/5) >> 2); // 1/5 от скорости 
 			stream_.query(&update_complete_);
 		}
 			
@@ -903,16 +903,49 @@ namespace avatar {
 		
 		void printf(void){
 			float ap[count];
+			float ha[count];
 			{
 				robo::system::guard g__;
 				get_actual_position();
 				std::copy_n(actuator_actual_,count, ap);
+				std::copy_n(human_actual_,count, ha);
 			}
-			robo::system::printf(RT("\033[0;0H"));
+			
+			human_to_actuator(ha,test_actuator,ap);
+			actuator_to_human(test_actuator, test_human);
+			
+			//robo::system::printf(RT("\033[0;0H"));
+			robo::system::printf(RT("\n\r                                                       \r"));			
+
 			for(int i=0;i<count; ++i){
-				robo::system::printf(RT("                                                   \r"));
-				robo::system::printf(RT("\t%s\t%2.2f\n\r"), actuators[i]->alias(), ap[i] );
+				robo::system::printf(RT("%s\t"), actuators[i]->alias());
 			}
+			robo::system::printf(RT("\n\r                                                       \r"));			
+
+			for(int i=0;i<count; ++i){
+				robo::system::printf(RT("%2.2f\t"), ap[i]);
+			}
+			robo::system::printf(RT("\n\r                                                       \r"));			
+
+			for(int i=0;i<count; ++i){
+				robo::system::printf(RT("%2.2f\t"), ap[i]-test_actuator[i]);
+			}
+			robo::system::printf(RT("\n\r                                                       \r"));			
+			robo::system::printf(RT("\n\r                                                       \r"));			
+			robo::system::printf(RT("%s\t%s\t%s\t%s\t%s\t%s"), RT("x"), RT("y"), RT("z"), RT("Y"), RT("P"), RT("R"));
+
+			robo::system::printf(RT("\n\r                                                       \r"));			
+			for(int i=0;i<count; ++i){
+				robo::system::printf(RT("%2.2f\t"), ha[i]);
+			}
+
+			robo::system::printf(RT("\n\r                                                       \r"));			
+			for(int i=0;i<count; ++i){
+				robo::system::printf(RT("%2.2f\t"), ha[i]-test_human[i]);
+			}
+			//robo::system::printf(RT("\n\r==========================================\n\r"));			
+
+			
 		/*	
 			if( mode_ == mode::tracking){
 				for(int i=0;i<count; i++){
@@ -1013,7 +1046,7 @@ namespace avatar {
 		}
 		
 		static void actuator_to_human(float * _actuator, float * _human);
-		static float human_to_actuator(float * _human, float * _actuator);
+		static float human_to_actuator(float * _human, float * _actuator, float * _prev);
 
 		void set_calibrate_position(void){
 			actuator ** p = actuators;			
@@ -1104,7 +1137,7 @@ namespace avatar {
 		}
 		
 		void start_tracking(void){
-			human_to_actuator(&human_deseired_[0], &actuator_req_[0]);
+			human_to_actuator(&human_deseired_[0], &actuator_req_[0],&actuator_actual_[0]);
 			set_req_position();
 			for_all(&actuator::start_tracking);
 			mode_ = mode::tracking;
@@ -1175,7 +1208,7 @@ namespace avatar {
 					human_deseired_[6] = human_req_[6];
 					human_deseired_[7] = human_req_[7];
 				}
-				human_to_actuator(&human_deseired_[0], &actuator_req_[0]);
+				human_to_actuator(&human_deseired_[0], &actuator_req_[0],&actuator_actual_[0]);
 				set_req_position();
 				update_control();
 				
@@ -1347,14 +1380,14 @@ namespace avatar {
 				}
 				break;
 			}
-		//	if(mode_ > mode::configure){
+			if(mode_ > mode::configure){
 				query_snapshot();	
-		//	}
+			}
 		}
 	protected:
 		virtual void frontend_loop(void) {
 				static robo::time_us_t tm =0;
-				if( robo::system::env::time_ms()-tm>100){
+				if( robo::system::env::time_ms()-tm>1000){
 					printf();
 					tm = robo::system::env::time_ms();
 				}
@@ -1411,10 +1444,11 @@ namespace avatar {
 			return true;
 		}
 		struct{
-			float L1 = 400;
-			float L2 = 300;
-			float L3 = 80;
-			float L5 = 50;
+			float L11 = 300.f;
+			float L12 = 35.f;
+			float L1 = 0;
+			float df = 0;
+			float L2 = 302.5f;
 		}gm;
 		module(void) 
 			: robo::app::module(MODULE_NAME_STR )
@@ -1439,11 +1473,19 @@ namespace avatar {
 			actuators[5] = &roll_6_;
 			actuators[6] = &grab_7_;
 			actuators[7] = &grab_8_;
+			gm.L1 = sqrt( gm.L11*gm.L11 + gm.L12*gm.L12);
+			#ifdef RIGHT_HAND
+			gm.df= atan2(gm.L12,gm.L11);
+			#endif
+			#ifdef LEFT_HAND
+			gm.df= -atan2(gm.L12,gm.L11);
+			#endif
 		}
 		void move_to_(const point & _point){
 			if(mode_ != mode::off){
 				robo::system::guard g__;
 				std::copy_n(_point.values,7,human_req_);
+				human_req_[7] = human_req_[6];
 				command_ = command::tracking;
 			}
 		}
@@ -1741,68 +1783,60 @@ void avatar::shutdown(void){
 
 
 void avatar::module::actuator_to_human(float * _actuator, float * _human){
-	const float gain =robo::pi<float>/180.f;
-	
+	const float pi = robo::pi<float>;
+	const float gain = pi/180.f;	
 	#ifdef RIGHT_HAND
-	float q0 = (-_actuator[0])*gain;
+	float q1 = _actuator[1]*gain;
 	#endif
 	#ifdef LEFT_HAND
-	float q0 = (-_actuator[0]+180)*gain;
+	float q1 = (_actuator[1]+180.f)*gain;
 	#endif
 
-	float q1 = -_actuator[1]*gain;
-	
-	#ifdef RIGHT_HAND
-	float q2 = -_actuator[2]*gain;
-	#endif
-	#ifdef LEFT_HAND
 	float q2 = _actuator[2]*gain;
-	#endif
-	
 	float q3 = _actuator[3]*gain;
-
-	#ifdef RIGHT_HAND
 	float q4 = _actuator[4]*gain;
-	#endif
-	#ifdef LEFT_HAND
-	float q4 = -_actuator[4]*gain;
-	#endif
+	float q5 = _actuator[5]*gain;
 
-	float q5 = _actuator[5];
-	
-	float f1 = q1;		
-	float f2=f1 + q2;
-	float f3=f2 + q3;
+	//todo говнокод
 	float L1= instance().gm.L1;
 	float L2= instance().gm.L2;
-	float L3= instance().gm.L3;
-	float L5= instance().gm.L5;
-	float x = L1 * ( cos( f1 ) ) + 
-						L2 * ( cos( f2 ) );
+	float df= instance().gm.df;
+	
+	float	f1	=	q1	+	df;
+	float f2	=	q1	+	q2;
+	
+	
+	float x1 = L1 * ( cos( f1 ) );
+	float x2 = L2 * ( cos( f2 ) );
+	float x	=	x1 + x2;
 
-		float y = L1 * ( sin( f1 ) ) + 
-							L2 * ( sin( f2 ) );
-
-		float z = q0;
+	float y1 =	L1 * ( sin( f1 ) ); 
+	float y2 =	L2 * ( sin( f2 ) );
+	float y	=	y1 + y2;
 	
 /*		
-% A(Q4,Q5) =  
-% [          cos(q5),       0,          sin(q5)]
-% [  sin(q4)*sin(q5), cos(q4), -cos(q5)*sin(q4)]
-% [ -cos(q4)*sin(q5), sin(q4),  cos(q4)*cos(q5)]
-% A(Y,P,R) = 
-% [ cos(P)*cos(Y), - cos(R)*sin(Y) - cos(Y)*sin(P)*sin(R),   sin(R)*sin(Y) - cos(R)*cos(Y)*sin(P)]
-% [ cos(P)*sin(Y),   cos(R)*cos(Y) - sin(P)*sin(R)*sin(Y), - cos(Y)*sin(R) - cos(R)*sin(P)*sin(Y)]
-% [        sin(P),                          cos(P)*sin(R),                          cos(P)*cos(R)]
-*/
+% A(Q4,Q5, Q6) =  
+[          cos(q4),                           sin(q4)*sin(q5),                             cos(q5)*sin(q4)]
+[  sin(q3)*sin(q4), cos(q3)*cos(q5) - cos(q4)*sin(q3)*sin(q5), - cos(q3)*sin(q5) - cos(q4)*cos(q5)*sin(q3)]
+[ -cos(q3)*sin(q4), cos(q5)*sin(q3) + cos(q3)*cos(q4)*sin(q5),   cos(q3)*cos(q4)*cos(q5) - sin(q3)*sin(q5)]
+ 
+ 
+A2 =
+ 
+[ cos(P)*cos(Y), cos(Y)*sin(P)*sin(R) - cos(R)*sin(Y), sin(R)*sin(Y) + cos(R)*cos(Y)*sin(P)]
+[ cos(P)*sin(Y), cos(R)*cos(Y) + sin(P)*sin(R)*sin(Y), cos(R)*sin(P)*sin(Y) - cos(Y)*sin(R)]
+[       -sin(P),                        cos(P)*sin(R),                        cos(P)*cos(R)]
+ */
 		
-    float P = asin(-cos(q4)*sin(q5));
-    float R = atan2( sin(q4), cos(q4)*cos(q5));
-    float Y = atan2( sin(q4)*sin(q5), cos(q5) ) - robo::pi<float>/2 + f3;
-		
+    float P = -asin( -cos(q3)*sin(q4));
+    float R =	atan2( cos(q5)*sin(q3) + cos(q3)*cos(q4)*sin(q5),  cos(q3)*cos(q4)*cos(q5) - sin(q3)*sin(q5) );
+    float Y = atan2(   sin(q3)*sin(q4), cos(q4) ) ;
+		float dY =  -pi/2 + q1 + q2;
+		Y = Y+dY;
+		if(Y>pi) Y -= 2*pi; else if(Y<-pi) Y += 2*pi;
 		_human[0] = x;
 		_human[1] = y;
-		_human[2] = z;
+		_human[2] = _actuator[0];
 		_human[3] = Y/gain;
 		_human[4] = P/gain;
 		_human[5] = R/gain;
@@ -1812,11 +1846,105 @@ void avatar::module::actuator_to_human(float * _actuator, float * _human){
 	}
 
 
-float avatar::module::human_to_actuator(float * _human, float * _actuator){
-	const float gain =180.f/robo::pi<float>;
+float avatar::module::human_to_actuator(float * _human, float * _actuator, float * _prev){
+	const float pi = robo::pi<float>;
+	const float gain =180.f/pi;
 	float xg =_human[0];
 	float yg =_human[1];
-	float zg =_human[2];
+	float err = 0.f;
+	
+	float ro2=xg*xg+yg*yg;
+
+	float ro = sqrt(ro2);
+
+	//todo говнокод
+	float L1= instance().gm.L1;
+	float L2= instance().gm.L2;
+	float df= instance().gm.df;
+
+	float alfa;
+	float beta;
+
+	if(ro>=L1+L2){
+		alfa=robo::pi<float>;
+		ro = L1+L2;
+		beta = 0.f;
+	}else{
+		alfa= acos( (-ro2 + L1*L1 + L2*L2) / (2*L1*L2) );
+		beta = asin(L2/ro*sin(alfa));
+	}
+	
+	float fi_ro = atan2(yg,xg);
+	
+	float q2 = -(pi - alfa) + df;
+	
+	float q1 = -pi +  fi_ro + beta -df;
+
+	float Y =_human[3]/gain;
+	float P =_human[4]/gain;
+	float R =_human[5]/gain;
+	
+	float dY =  pi/2 + q1 + q2;
+	
+	Y = Y - dY;
+	if(Y>pi) Y -= 2*pi; else if(Y<-pi) Y += 2*pi;
+
+	/*
+[          cos(q4),                           sin(q4)*sin(q5),                             cos(q5)*sin(q4)]
+[  sin(q3)*sin(q4), cos(q3)*cos(q5) - cos(q4)*sin(q3)*sin(q5), - cos(q3)*sin(q5) - cos(q4)*cos(q5)*sin(q3)]
+[ -cos(q3)*sin(q4), cos(q5)*sin(q3) + cos(q3)*cos(q4)*sin(q5),   cos(q3)*cos(q4)*cos(q5) - sin(q3)*sin(q5)]
+ 
+ 
+A2 =
+ 
+[ cos(P)*cos(Y), cos(Y)*sin(P)*sin(R) - cos(R)*sin(Y), sin(R)*sin(Y) + cos(R)*cos(Y)*sin(P)]
+[ cos(P)*sin(Y), cos(R)*cos(Y) + sin(P)*sin(R)*sin(Y), cos(R)*sin(P)*sin(Y) - cos(Y)*sin(R)]
+[       -sin(P),                        cos(P)*sin(R),                        cos(P)*cos(R)]
+*/
+	const float eps = 0.001;
+	float q3 = 0.f;
+	float q4 = 0.f;
+	float q5 = 0.f;
+
+	//первый вариант
+	q4= acos(cos(P)*cos(Y));
+	
+	if( abs(sin(q4)) > eps ){
+		q3 = atan2(cos(P)*sin(Y), sin(P) );
+	}else {
+		q3 = _prev[3]/gain;
+	}
+
+	if( (q3 > robo::pi<float>/2)){
+		q4 = -q4;
+		q3 = q3-robo::pi<float>;
+	} else if (q3 < -robo::pi<float>/2){
+		q4 = -q4;
+		q3 = q3+robo::pi<float>;
+	}
+
+	if( abs(sin(q4)) > eps ){
+		float dx = sin(R)*sin(Y) + cos(R)*cos(Y)*sin(P);
+		float dy =cos(Y)*sin(P)*sin(R) - cos(R)*sin(Y);
+		if(q4 < 0 ){
+			dx = -dx;
+			dy = -dy;
+		} 
+		q5 = atan2(  dy , dx );
+	}else{
+		q5 = R - q3;
+	}
+	
+	_actuator[0] = _human[2];
+	_actuator[1] = q1*gain;
+	_actuator[2] = q2*gain;
+	_actuator[3] = q3*gain;
+	_actuator[4] = q4*gain;
+	_actuator[5] = q5*gain;
+	_actuator[6] = _human[6];
+	_actuator[7] = _human[7];
+	
+/*	float zg =_human[2];
 	float T =_human[3]/gain;
 	float P =_human[4]/gain;
 	float R =_human[5]/gain;
@@ -1824,8 +1952,6 @@ float avatar::module::human_to_actuator(float * _human, float * _actuator){
 	float L2= instance().gm.L2;
 	float L3= instance().gm.L3;
 	float L5= instance().gm.L5;
-	//function [q1,q2,q3,q4,q5,q6] = align(T, Y, P, R)
-//global L1 L2 L3 L5 xg yg zg
 
 	float Y; 
 	if( abs(cos(P))<0.001 ){
@@ -1933,7 +2059,7 @@ float avatar::module::human_to_actuator(float * _human, float * _actuator){
 
 	_actuator[6] = _human[6];
 	_actuator[7] = _human[7]; 
-
+*/
 	return err;
 	
 }

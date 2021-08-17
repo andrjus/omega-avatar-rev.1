@@ -52,7 +52,7 @@ size_t  UART3_BUFFER_COUNT = 0;
 size_t UART3_ACTUAL_SIZE=0;
 void transport_poll(void);
 transport_buffer * transport_buffer_query(void){
-	/*if( robo::system::env::is_frontend() ){
+	if( robo::system::env::is_frontend() ){
 		int cnt = 0;
 		do{
 			{
@@ -64,7 +64,7 @@ transport_buffer * transport_buffer_query(void){
 			}
 			transport_poll();
 		} while(cnt<1);
-	} */
+	} 
 	robo::system::guard g__;
 	if(transport_buffers_pool_.count()>0){
 		transport_buffer * ret = transport_buffers_pool_.get();
@@ -113,7 +113,7 @@ void transport_poll(void){
 #if ROBO_UNICODE_ENABLED == 1
 #include <wchar.h>
 #endif
-#define PERSISTENT_INI 0
+#define PERSISTENT_INI 1
 
 #if  PERSISTENT_INI == 0
 bool build_default_ini_(void);
@@ -205,8 +205,8 @@ void avatar::dynamixel_TTL_channel::receive(uint8_t * _data, unsigned int _count
 
 namespace robo {
 	bool system::env::begin(void) {
-		
-		nand_file_system_build_();
+		//todo только первый раз
+		//nand_file_system_build_();
 
 		ROBO_LBREAKN(nand_file_system_mount());
 
@@ -811,27 +811,27 @@ bool build_default_ini_(void){
 		"scale=-256\n"
 
 		"[yaw-2_position_co]\n"
-		"min=-179\n"
-		"max=179\n"
-		"offset=-180\n"
+		"min=-108\n"
+		"max=98\n"
+		"offset=-192\n"
 		"scale=11.375\n"
 
 		"[yaw-3_position_co]\n"
-		"min=-179\n"
-		"max=179\n"
-		"offset=-180\n"
+		"min=-170\n"
+		"max=15\n"
+		"offset=-334.5\n"
 		"scale=11.375\n"
 		
 		"[roll-4_position_co]\n"
 		"min=-89\n"
 		"max=89\n"
-		"offset=156.8\n"
+		"offset=89.6\n"
 		"scale=-22.766\n"
 
 		"[pitch-5_position_co]\n"
 		"min=-95\n"
 		"max=80\n"
-		"offset=-190.9\n"
+		"offset=-97.2\n"
 		"scale=22.766\n"
 
 		"[roll-6_position_co]\n"
@@ -883,7 +883,7 @@ bool build_default_ini_(void){
 		"BOARD_DEV_ID=1\n"
 		"BOARD_ADDRESS=0x02\n"		
 		"ENABLED=1\n"		
-		"calibrate_position=-41\n"
+		"calibrate_position=-14\n"
 		"position_dead_zone=1\n"
 		"speed_max=30\n"
 		"position_converter=\"avatar/yaw-2_position_co\"\n"
@@ -897,7 +897,7 @@ bool build_default_ini_(void){
 		"BOARD_DEV_ID=1\n"
 		"BOARD_ADDRESS=0x03\n"		
 		"ENABLED=1\n"		
-		"calibrate_position=-96\n"
+		"calibrate_position=-151\n"
 		"position_dead_zone=1\n"
 		"speed_max=30\n"
 		"position_converter=\"avatar/yaw-3_position_co\"\n"
@@ -912,7 +912,7 @@ bool build_default_ini_(void){
 		"BOARD_DEV_ID=1\n"
 		"BOARD_ADDRESS=0x02\n"		
 		"ENABLED=1\n"		
-		"calibrate_position=0\n"
+		"calibrate_position=-88\n"
 		"position_dead_zone=1\n"
 		"speed_max=60\n"
 		"position_converter=\"avatar/roll-4_position_co\"\n"
@@ -926,7 +926,7 @@ bool build_default_ini_(void){
 		"BOARD_DEV_ID=1\n"
 		"BOARD_ADDRESS=0x03\n"		
 		"ENABLED=1\n"		
-		"calibrate_position=0\n"
+		"calibrate_position=-88\n"
 		"position_dead_zone=1\n"
 		"speed_max=60\n"
 		"position_converter=\"avatar/pitch-5_position_co\"\n"
@@ -940,7 +940,7 @@ bool build_default_ini_(void){
 		"BOARD_DEV_ID=1\n"
 		"BOARD_ADDRESS=0x04\n"		
 		"ENABLED=1\n"		
-		"calibrate_position=0\n"
+		"calibrate_position=82\n"
 		"position_dead_zone=1\n"
 		"speed_max=60\n"
 		"position_converter=\"avatar/roll-6_position_co\"\n"
@@ -984,7 +984,7 @@ bool build_default_ini_(void){
 		"ENABLED=1\n"
 		"calibrate_position=250\n"
 		"position_dead_zone=0.1\n"
-		"speed_max=150\n"
+		"speed_max=90\n"
 		"position_converter=\"avatar/z-1_position_co\"\n"	
 		"homing_ofset=0\n"		
 	

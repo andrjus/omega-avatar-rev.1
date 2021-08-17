@@ -1,7 +1,7 @@
 import serial
 import json
 import time
-ser = serial.Serial('COM11', 9600, timeout=0, rtscts=1)
+ser = serial.Serial('COM11', 115200, timeout=0, rtscts=0)
 
 print(ser)
 					
@@ -20,7 +20,7 @@ hand_commands = [
             "p": -85.0,
             "y": -90.0
         },
-        "fingers": [255]
+        "fingers": [0.0]
     }
 ]
 j_str = json.dumps(hand_commands[0]).replace(" ", "")
