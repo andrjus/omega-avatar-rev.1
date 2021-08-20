@@ -987,7 +987,8 @@ void dc_moto_machine::applay_data( uint8_t * _in){
 				joint.motor_position.raw = data->position_2<<1;
 			}
 		break;
-			
+		default:
+			command_ = 0;
 	}
 	send_answer_data();
 }

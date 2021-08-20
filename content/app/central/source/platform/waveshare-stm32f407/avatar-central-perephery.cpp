@@ -113,7 +113,7 @@ void transport_poll(void){
 #if ROBO_UNICODE_ENABLED == 1
 #include <wchar.h>
 #endif
-#define PERSISTENT_INI 1
+#define PERSISTENT_INI 0
 
 #if  PERSISTENT_INI == 0
 bool build_default_ini_(void);
@@ -224,11 +224,11 @@ namespace robo {
 
 	#if ROBO_APP_ENV_TYPE == ROBO_APP_TYPE_KEIL
 
-	time_us_t period_us_ = 1000;
+	time_us_t period_us_ = 100;
 	time_us_t us_ = 0;
 	time_ms_t ms_ = 0;
 	time_us_t us_acc_ = 0;
-	void tick(void){
+	void tick_(void){
 		us_+=period_us_;
 		us_acc_+=period_us_;
 		if(us_acc_>=1000){
@@ -270,7 +270,6 @@ namespace robo {
 	}
 	
 	void system::env::backend_loop(void) {
-		tick();
 	}
 
 	void * system::env::critical_enter(void) {
@@ -731,14 +730,23 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
-	HAL_GPIO_TogglePin(TEST_1_GPIO_Port,TEST_1_Pin);
+	HAL_GPIO_WritePin(TEST_1_GPIO_Port,TEST_1_Pin,GPIO_PIN_SET);
+	robo::tick_();
 	HAL_TIM_TriggerCallback(htim);
 	if(! robo::app::machine::terminated() ) robo::app::machine::backend_loop();
+	HAL_GPIO_WritePin(TEST_1_GPIO_Port,TEST_1_Pin,GPIO_PIN_RESET);
 
 }
 
+void avatar::led_on(void){
+	HAL_GPIO_WritePin(TEST_2_GPIO_Port,TEST_2_Pin,GPIO_PIN_SET);
+}
+void avatar::led_off(void){
+	HAL_GPIO_WritePin(TEST_2_GPIO_Port,TEST_2_Pin,GPIO_PIN_RESET);
+}
+
 void HAL_TIM_TriggerCallback(TIM_HandleTypeDef *htim){
-	HAL_GPIO_TogglePin(TEST_2_GPIO_Port,TEST_2_Pin);
+	//HAL_GPIO_TogglePin(TEST_2_GPIO_Port,TEST_2_Pin);
 }
 
 
@@ -805,21 +813,21 @@ bool build_default_ini_(void){
 		"converter_8=grab-8_position_co\n"
 	
 		"[z-1_position_co]\n"
-		"min=110\n"
-		"max=490\n"
-		"offset=500\n"
-		"scale=-256\n"
+		"min=10\n"
+		"max=390\n"
+		"offset=0\n"
+		"scale=256\n"
 
 		"[yaw-2_position_co]\n"
 		"min=-108\n"
 		"max=98\n"
-		"offset=-192\n"
+		"offset=-206,1\n"
 		"scale=11.375\n"
 
 		"[yaw-3_position_co]\n"
 		"min=-170\n"
 		"max=15\n"
-		"offset=-334.5\n"
+		"offset=-316,4\n"
 		"scale=11.375\n"
 		
 		"[roll-4_position_co]\n"
@@ -835,21 +843,21 @@ bool build_default_ini_(void){
 		"scale=22.766\n"
 
 		"[roll-6_position_co]\n"
-		"min=-90\n"
-		"max=90\n"
-		"offset=222.2\n"
+		"min=-130\n"
+		"max=130\n"
+		"offset=226.5\n"
 		"scale=-11.375\n"
 
 		"[grab-7_position_co]\n"
 		"min=0\n"
 		"max=255\n"
-		"offset=959.4\n"
+		"offset=613,9\n"
 		"scale=-3.725\n"
 
 		"[grab-8_position_co]\n"
 		"min=0\n"
 		"max=255\n"
-		"offset=777.1\n"
+		"offset=585,2\n"
 		"scale=-3.725\n"
 
 		"[dynamixel_rs485_bus]\n"
@@ -865,10 +873,10 @@ bool build_default_ini_(void){
 		"DEFAULT_TIMEOUT_US=5000\n"
 
 		"[hand]\n"
-		"REQUEST_PAUSE_US=100 #rx485 proto unswering after delay\n"
+		"REQUEST_PAUSE_US=0 #rx485 proto unswering after delay\n"
 
 		"[grab]\n"
-		"REQUEST_PAUSE_US=5000 #TTL proto unswering after delay\n"
+		"REQUEST_PAUSE_US=0 #TTL proto unswering after delay\n"
 
 		"[fake_router]\n"
 		"ROUT_TABLE_SIZE=0\n"
@@ -883,9 +891,9 @@ bool build_default_ini_(void){
 		"BOARD_DEV_ID=1\n"
 		"BOARD_ADDRESS=0x02\n"		
 		"ENABLED=1\n"		
-		"calibrate_position=-14\n"
-		"position_dead_zone=1\n"
-		"speed_max=30\n"
+		"calibrate_position=82.35\n"
+		"position_dead_zone=2\n"
+		"speed_max=200\n"
 		"position_converter=\"avatar/yaw-2_position_co\"\n"
 		"homing_ofset=0\n"		
 
@@ -897,9 +905,9 @@ bool build_default_ini_(void){
 		"BOARD_DEV_ID=1\n"
 		"BOARD_ADDRESS=0x03\n"		
 		"ENABLED=1\n"		
-		"calibrate_position=-151\n"
-		"position_dead_zone=1\n"
-		"speed_max=30\n"
+		"calibrate_position=-165\n"
+		"position_dead_zone=2\n"
+		"speed_max=200\n"
 		"position_converter=\"avatar/yaw-3_position_co\"\n"
 		"homing_ofset=0\n"		
 
@@ -912,9 +920,9 @@ bool build_default_ini_(void){
 		"BOARD_DEV_ID=1\n"
 		"BOARD_ADDRESS=0x02\n"		
 		"ENABLED=1\n"		
-		"calibrate_position=-88\n"
-		"position_dead_zone=1\n"
-		"speed_max=60\n"
+		"calibrate_position=0\n"
+		"position_dead_zone=2\n"
+		"speed_max=600\n"
 		"position_converter=\"avatar/roll-4_position_co\"\n"
 		"homing_ofset=0\n"		
 
@@ -926,9 +934,9 @@ bool build_default_ini_(void){
 		"BOARD_DEV_ID=1\n"
 		"BOARD_ADDRESS=0x03\n"		
 		"ENABLED=1\n"		
-		"calibrate_position=-88\n"
-		"position_dead_zone=1\n"
-		"speed_max=60\n"
+		"calibrate_position=0\n"
+		"position_dead_zone=2\n"
+		"speed_max=600\n"
 		"position_converter=\"avatar/pitch-5_position_co\"\n"
 		"homing_ofset=0\n"		
 
@@ -940,9 +948,9 @@ bool build_default_ini_(void){
 		"BOARD_DEV_ID=1\n"
 		"BOARD_ADDRESS=0x04\n"		
 		"ENABLED=1\n"		
-		"calibrate_position=82\n"
-		"position_dead_zone=1\n"
-		"speed_max=60\n"
+		"calibrate_position=0\n"
+		"position_dead_zone=2\n"
+		"speed_max=600\n"
 		"position_converter=\"avatar/roll-6_position_co\"\n"
 		"homing_ofset=0\n"		
 
@@ -955,7 +963,7 @@ bool build_default_ini_(void){
 		"BOARD_ADDRESS=0x05\n"		
 		"ENABLED=1\n"		
 		"calibrate_position=30\n"
-		"position_dead_zone=1\n"
+		"position_dead_zone=2\n"
 		"speed_max=60\n"
 		"position_converter=\"avatar/grab-7_position_co\"\n"
 		"homing_ofset=0\n"		
@@ -969,7 +977,7 @@ bool build_default_ini_(void){
 		"BOARD_ADDRESS=0x06\n"		
 		"ENABLED=1\n"		
 		"calibrate_position=30\n"
-		"position_dead_zone=1\n"
+		"position_dead_zone=2\n"
 		"speed_max=60\n"
 		"position_converter=\"avatar/grab-8_position_co\"\n"
 		"homing_ofset=0\n"		
@@ -981,10 +989,10 @@ bool build_default_ini_(void){
 		"ROUTER_NAME=\"avatar/fake_router\"\n"
 		"BOARD_DEV_ID=1\n"
 		"BOARD_ADDRESS=0x01\n"		
-		"ENABLED=1\n"
+		"ENABLED=1\n"		
 		"calibrate_position=250\n"
 		"position_dead_zone=0.1\n"
-		"speed_max=90\n"
+		"speed_max=350\n"
 		"position_converter=\"avatar/z-1_position_co\"\n"	
 		"homing_ofset=0\n"		
 	
@@ -999,12 +1007,12 @@ bool build_default_ini_(void){
 ;
 #endif
 
-	FIL testFile;
-	f_open(&testFile, AVATAR_INI_FILE, FA_WRITE | FA_CREATE_ALWAYS);
+	FIL fini;
+	f_open(&fini, AVATAR_INI_FILE, FA_WRITE | FA_CREATE_ALWAYS);
 	uint32_t byteswritten;
 	uint32_t bytes = strlen(buf);
-	f_write (&testFile,buf, strlen(buf),&byteswritten);
-	f_close(&testFile);
+	f_write (&fini,buf, strlen(buf),&byteswritten);
+	f_close(&fini);
 	ROBO_LRET_F(byteswritten == bytes,"build ini error");
 }
 
@@ -1241,7 +1249,7 @@ void send_status(void){
 							"}"
 					"}\n"
 				};
-				static robo::cstr  status_names[ 9 ] = {
+				static robo::cstr  status_names[ 10 ] = {
 					RT("BOOTING")
 					, RT("READY")
 					, RT("NOT_CALIBRATED")
@@ -1251,6 +1259,7 @@ void send_status(void){
 					, RT("MOVING")
 					, RT("FAIL")
 					, RT("ERROR")
+					, RT("POWER OFF")
 				};
 				int no = (int )status.state;
 				size_t sz = robo::system::sprintf(
@@ -1300,6 +1309,10 @@ void command_poll(void){
 				avatar::shutdown();					
 			} else  if( strcmp(content_.cmd,"RESET") == 0 ){	
 				avatar::reset();					
+			} else if( strcmp(content_.cmd,"POWER_OFF") == 0 ){	
+				avatar::power_off();					
+			} else if( strcmp(content_.cmd,"POWER_ON") == 0 ){	
+				avatar::power_on();					
 			} else  if( strcmp(content_.cmd,"REBOOT") == 0 ){	
 					IWDG->KR = 0xCCCC; /* (1) */
 					IWDG->KR = 0x5555; /* (2) */

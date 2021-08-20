@@ -1,7 +1,7 @@
 import serial
 import json
 import time
-ser = serial.Serial('COM11', 9600, timeout=0, rtscts=1)
+ser = serial.Serial('COM4', 9600, timeout=0, rtscts=0)
 
 print(ser)
 					

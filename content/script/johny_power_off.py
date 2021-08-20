@@ -7,20 +7,7 @@ print(ser)
 					
 hand_commands = [
     {
-        "command": "ARM",
-        "timestamp": 1619009891000,
-        "arm": 0,
-        "pos": {
-            "x": -200.0,
-            "y": 200.0,
-            "z": 470.0
-        },
-        "rot": {
-            "r": -0.0,
-            "p": -0.0,
-            "y": -0.0
-        },
-        "fingers": [100]
+        "command": "POWER_OFF",
     }
 ]
 j_str = json.dumps(hand_commands[0]).replace(" ", "")

@@ -79,7 +79,9 @@ namespace avatar{
 				, MOVING = 6// — манипулятор выполняет движение
 				, FAIL = 7//— на манипуляторе обнаружена устранимая ошибка (требуется посылка команды RESET)
 				, ERROR = 8// — на манипуляторе обнаружена неустранимая ошибка. Требуется перезагрузить манипулятор (нужно сначала попробовать команду REBOOT 
-				, COUNT = ERROR+1
+				, POWER_OFF = 9// — у манипулятора вырублено питание приводов
+				, POWER_ON = 10// — у манипулятора вырублено питание приводов
+				, COUNT = POWER_ON+1
 			};
 		
 		states state;		
@@ -87,11 +89,15 @@ namespace avatar{
 	
 	void calibrate(void);
 	void stop(void);
+	void power_off(void);
+	void power_on(void);
 	void move_to(const point &_point);
 	void query_status(status & _status);
 	void shutdown(void);
 	void reset(void);
 	bool save_state(uint32_t _res);
 	bool load_state(uint32_t & _dst);
+	void led_on(void);
+	void led_off(void);
 }
 #endif

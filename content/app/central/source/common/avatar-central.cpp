@@ -49,7 +49,7 @@ namespace avatar{
 			virtual void start_calibrate(void) = 0;
 			virtual robo::result do_calibrate(void) = 0;
 
-			virtual void start_tracking(void) = 0;
+			virtual void start_moving(void) = 0;
 			virtual robo::result do_tracking(void) = 0;
 
 			virtual void power_off(void) = 0;
@@ -139,6 +139,7 @@ namespace avatar{
 			real  position_max_;
 			real  position_min_;
 			uint32  home_offset_;
+			uint8 bitrate_;
 			
 			void startup_confirm__( ::robo::frontend::contrltable::ivar& _var, bool _result){
 				if(_result){
@@ -146,8 +147,11 @@ namespace avatar{
 						contrltable_.ready()
 					){
 
-						const int new_addr = 2;
+						if( bitrate_.value() == 1){
+							bitrate_.post(3);
+						}
 
+						const int new_addr = 2;
 						if( id_.value() == 1){
 							id_.post(new_addr,startup_confirm_);
 							return;
@@ -212,6 +216,8 @@ namespace avatar{
 						);
 				}
 			}
+			//float mean_calc1=0;
+			//float mean_calc2=0;
 		public:				
 
 		Dynamixel(::robo::backend::boardagent & _owner,robo::cstr _name) 
@@ -240,6 +246,7 @@ namespace avatar{
 				, speed_prop_gain_(contrltable_,"POSITION_D_GAIN")
 				, speed_int_gain_(contrltable_,"VELOCITY_I_GAIN")
 				, home_offset_(contrltable_,"HOMING_OFFSET")
+				, bitrate_(contrltable_,"BAUD_RATE")
 			{
 			}
 			
@@ -290,7 +297,7 @@ namespace avatar{
 				return robo::result::complete;
 			}
 			
-			virtual void start_tracking(void){
+			virtual void start_moving(void){
 				required_position_.post(actual.action.position, power_boot_);
 			}
 			
@@ -490,7 +497,7 @@ namespace avatar{
 				}
 		}
 
-		virtual void start_tracking(void){
+		virtual void start_moving(void){
 			out_msg_.command = 4;
 			actual.action.position = actual.feedback.position;
 			out_msg_.position_2 = ((uint16_t)( converters.position->to_u32(actual.action.position) >> 1));
@@ -611,7 +618,7 @@ namespace avatar{
 				return robo::result::complete; 
 			}
 
-			virtual void start_tracking(void){
+			virtual void start_moving(void){
 			}
 			virtual robo::result do_tracking(void){
 				return robo::result::complete; 
@@ -1031,8 +1038,8 @@ namespace avatar {
 		}*/
 
 
-		enum class mode{ booting, configure, idle,restore ,not_calibrated, prepare_calibrate, calibrate, ready,  tracking, panic, power_off,shutdown, off} mode_ = mode::booting;
-		enum class command{ none, calibrate,tracking, ready } command_ =
+		enum class mode{ booting, configure, idle,restore ,not_calibrated, prepare_calibrate, calibrate, ready,  moving, panic, power_down, power_off, start_shutdown, shutdown, off} mode_ = mode::booting;
+		enum class command{ none, calibrate,moving, stop, power_off, power_on } command_ =
 		//command::calibrate;
 		command::none;
 		//command::tracking;
@@ -1046,7 +1053,7 @@ namespace avatar {
 		}
 		
 		static void actuator_to_human(float * _actuator, float * _human);
-		static float human_to_actuator(float * _human, float * _actuator, float * _prev);
+		static void human_to_actuator(float * _human, float * _actuator, float * _prev);
 
 		void set_calibrate_position(void){
 			actuator ** p = actuators;			
@@ -1131,24 +1138,25 @@ namespace avatar {
 		void start_ready(void){
 			hold_position();
 			//todo
-			for_all(&actuator::start_tracking);
+			for_all(&actuator::start_moving);
 			mode_ = mode::ready;
 			command_= command::none;
 		}
 		
-		void start_tracking(void){
+		void start_moving(void){
 			human_to_actuator(&human_deseired_[0], &actuator_req_[0],&actuator_actual_[0]);
 			set_req_position();
-			for_all(&actuator::start_tracking);
-			mode_ = mode::tracking;
-			command_= command::tracking;
+			for_all(&actuator::start_moving);
+			mode_ = mode::moving;
+			command_= command::moving;
 		}
 
 		robo::result do_tracking(void){
 			static robo::time_ms_t last_ms = 0;
 			robo::time_ms_t ms = robo::system::env::time_ms();
-			if( ms - last_ms>=100){				
-				const float T= 0.1f;
+			if( ms - last_ms>=25){				
+				led_on();
+				const float T= 0.025f;
 				last_ms = ms;
 				
 				/*float rK[3] = { human_req_[0], human_req_[1], human_req_[2]};
@@ -1172,7 +1180,7 @@ namespace avatar {
 						norm[i] =  ro[i]/mro;
 						//V0 += human_actual_speed_[i]*norm[i];
 					}		
-					const float Vmax = 200.f;
+					const float Vmax = 100.f;
 					float dt = mro/Vmax;
 					if( dt > T ){
 						dt=T;
@@ -1211,14 +1219,16 @@ namespace avatar {
 				human_to_actuator(&human_deseired_[0], &actuator_req_[0],&actuator_actual_[0]);
 				set_req_position();
 				update_control();
+				led_off();
 				
 			}
 			return do_all(&actuator::do_tracking);
 		}
 		
-		void power_off(void){
+		void start_shutdown(void){
 			for_all(&actuator::power_off);
 			mode_ = mode::shutdown;
+			command_= command::none;
 		}
 		robo::result do_shutdown(void){
 			return do_all(&actuator::do_shutdown);
@@ -1226,10 +1236,16 @@ namespace avatar {
 		
 
 		void panic(void){			
-			power_off();
+			start_shutdown();
 			mode_ = mode::panic;
 		}
-		
+
+		void power_down(void){
+			for_all(&actuator::power_off);
+			mode_ = mode::power_down;
+			command_= command::none;
+		}		
+
 		::robo::time_ms_t start_time_=0;
 		
 		void control_loop_machine__(void){
@@ -1284,7 +1300,7 @@ namespace avatar {
 				
 			case mode::prepare_calibrate:
 				if(command_!= command::calibrate){
-					power_off();
+					power_down();
 				} else {
 					switch(do_calibrate_prepare()){
 					case robo::result::resume:						
@@ -1300,7 +1316,7 @@ namespace avatar {
 
 			case mode::calibrate:
 				if(command_!= command::calibrate){
-					power_off();
+					power_down();
 				} else {
 					switch(do_calibrate()){
 					case robo::result::resume:						
@@ -1314,9 +1330,9 @@ namespace avatar {
 				}
 				break;
 
-			case mode::tracking:
+			case mode::moving:
 				switch(command_){
-					case command::tracking:
+					case command::moving:
 						switch(do_tracking()){
 							case robo::result::resume:						
 							break;
@@ -1330,14 +1346,15 @@ namespace avatar {
 					case command::calibrate:
 						start_calibrate_prepare();
 					break;
-					case command::ready:
-						start_ready();
-					break;
+					case command::power_off:
+						power_down();
 					default:
+						start_ready();
 					break;
 				}
 				break;
-
+			case mode::start_shutdown:
+							start_shutdown();
 			case mode::shutdown:
 				switch(do_shutdown()){
 				case robo::result::resume:						
@@ -1363,19 +1380,38 @@ namespace avatar {
 				break;
 			case mode::off:
 				break;
+			
+			case mode::power_down:
+				switch(do_shutdown()){
+				case robo::result::resume:						
+				break;
+				case robo::result::complete:
+					mode_ = mode::power_off;
+				break;
+				case robo::result::panic:
+					panic();
+				}
+				break;
+				
 			case mode::power_off:
-				power_off();
+				if(command_== command::power_on){
+					mode_ = mode::idle;
+				}
 				break;
 			case mode::ready:
 				update_control();
 				switch(command_){
-					case command::tracking:
-						start_tracking();
+					case command::moving:
+						start_moving();
 					break;
 					case command::calibrate:
 						start_calibrate();
+					case command::none:
+					case command::stop:
+					case command::power_on:
 					break;
 					default:
+						power_down();
 						break;
 				}
 				break;
@@ -1438,7 +1474,7 @@ namespace avatar {
 			joint_channel.start();
 			grab_channel.start();
 			can_channel.start();
-			control_loop_machine_.start(100000);
+			control_loop_machine_.start(25000);
 			/*content c;
 			c.run(nullptr);*/
 			return true;
@@ -1485,8 +1521,9 @@ namespace avatar {
 			if(mode_ != mode::off){
 				robo::system::guard g__;
 				std::copy_n(_point.values,7,human_req_);
+				//todo бытлокод
 				human_req_[7] = human_req_[6];
-				command_ = command::tracking;
+				command_ = command::moving;
 			}
 		}
 		
@@ -1495,10 +1532,19 @@ namespace avatar {
 		}
 		void stop_(void){
 			if(mode_ != mode::off){
-				command_ = command::ready;			
+				command_ = command::stop;			
 			}
 		}
-		
+		void power_off_(void){
+			if(mode_ != mode::off){
+				command_ = command::power_off;			
+			}
+		}
+		void power_on_(void){
+			if(mode_ != mode::off){
+				command_ = command::power_on;			
+			}
+		}		
 		void query_status_(status & _status){
 			mode tmp;
 			{
@@ -1523,15 +1569,18 @@ namespace avatar {
 				case mode::ready:
 					_status.state = status::states::READY;
 				break;
-				case mode::tracking:
+				case mode::moving:
 					_status.state = status::states::MOVING;
 				break;
 				case mode::panic:
 					_status.state = status::states::FAIL;
 				break;
 				case mode::power_off:
+				case mode::power_down:
+					_status.state = status::states::POWER_OFF;
+				break;
+				case mode::start_shutdown:
 				case mode::shutdown:
-					_status.state = status::states::SHUTTING_DOWN;
 				break;
 				case mode::off:
 					_status.state = status::states::OFF;
@@ -1548,7 +1597,7 @@ namespace avatar {
 		void shutdown_(void){
 //			power_off();
 			if(mode_ != mode::off){
-				mode_ = mode::power_off;
+				mode_ = mode::start_shutdown;
 				command_ = command::none;
 			}
 		}
@@ -1560,6 +1609,13 @@ namespace avatar {
 
 		static void stop(void){
 			instance().stop_();
+		}
+
+		static void power_off(void){
+			instance().power_off_();
+		}
+		static void power_on(void){
+			instance().power_on_();
 		}
 
 		static void move_to(const point & _point){
@@ -1780,22 +1836,45 @@ void avatar::reset(void){
 void avatar::shutdown(void){
 	module::shutdown();
 }
+void avatar::power_off(void){
+	module::power_off();
+}
+void avatar::power_on(void){
+	module::power_on();
+}
 
+const float pi = robo::pi<float>;
+const float gain =180.f/pi;
+const float eps = 0.001;
 
+float angle_delta( float _f1, float _f2) {
+	float delta = _f1 - _f2;
+	if(delta<-pi){
+		delta += 2.f*pi;
+	} else {
+		if(delta>pi){
+			delta -= 2.f*pi;
+		}
+	}
+	return delta;
+}
+
+bool angle_score(float _f1, float _f2){
+	return true; //( abs(_f1) <= pi/2+eps ) && ( abs(angle_delta(_f1,_f2))< pi/2+eps );
+}
 void avatar::module::actuator_to_human(float * _actuator, float * _human){
-	const float pi = robo::pi<float>;
-	const float gain = pi/180.f;	
+//	led_on();
 	#ifdef RIGHT_HAND
-	float q1 = _actuator[1]*gain;
+	float q1 = _actuator[1]/gain;
 	#endif
 	#ifdef LEFT_HAND
-	float q1 = (_actuator[1]+180.f)*gain;
+	float q1 = (_actuator[1]+180.f)/gain;
 	#endif
 
-	float q2 = _actuator[2]*gain;
-	float q3 = _actuator[3]*gain;
-	float q4 = _actuator[4]*gain;
-	float q5 = _actuator[5]*gain;
+	float q2 = _actuator[2]/gain;
+	float q3 = _actuator[3]/gain;
+	float q4 = _actuator[4]/gain;
+	float q5 = _actuator[5]/gain;
 
 	//todo говнокод
 	float L1= instance().gm.L1;
@@ -1815,43 +1894,49 @@ void avatar::module::actuator_to_human(float * _actuator, float * _human){
 	float y	=	y1 + y2;
 	
 /*		
-% A(Q4,Q5, Q6) =  
 [          cos(q4),                           sin(q4)*sin(q5),                             cos(q5)*sin(q4)]
 [  sin(q3)*sin(q4), cos(q3)*cos(q5) - cos(q4)*sin(q3)*sin(q5), - cos(q3)*sin(q5) - cos(q4)*cos(q5)*sin(q3)]
 [ -cos(q3)*sin(q4), cos(q5)*sin(q3) + cos(q3)*cos(q4)*sin(q5),   cos(q3)*cos(q4)*cos(q5) - sin(q3)*sin(q5)]
  
- 
-A2 =
- 
-[ cos(P)*cos(Y), cos(Y)*sin(P)*sin(R) - cos(R)*sin(Y), sin(R)*sin(Y) + cos(R)*cos(Y)*sin(P)]
-[ cos(P)*sin(Y), cos(R)*cos(Y) + sin(P)*sin(R)*sin(Y), cos(R)*sin(P)*sin(Y) - cos(Y)*sin(R)]
-[       -sin(P),                        cos(P)*sin(R),                        cos(P)*cos(R)]
+[ cos(P)*cos(Y), - cos(R)*sin(Y) - cos(Y)*sin(P)*sin(R),   sin(R)*sin(Y) - cos(R)*cos(Y)*sin(P)]
+[ cos(P)*sin(Y),   cos(R)*cos(Y) - sin(P)*sin(R)*sin(Y), - cos(Y)*sin(R) - cos(R)*sin(P)*sin(Y)]
+[        sin(P),                          cos(P)*sin(R),                          cos(P)*cos(R)]
  */
+		float cos_q3 =cos(q3);
+		float sin_q3 =sin(q3);
 		
-    float P = -asin( -cos(q3)*sin(q4));
-    float R =	atan2( cos(q5)*sin(q3) + cos(q3)*cos(q4)*sin(q5),  cos(q3)*cos(q4)*cos(q5) - sin(q3)*sin(q5) );
-    float Y = atan2(   sin(q3)*sin(q4), cos(q4) ) ;
+		float cos_q4 =cos(q4);
+		float sin_q4 =sin(q4);
+		
+		float cos_q5 =cos(q5);
+		float sin_q5 =sin(q5);
+
+		float P = asin( -cos_q3 * sin_q4 );
+    float R =	atan2(  cos_q5 * sin_q3 + cos_q3 * cos_q4 * sin_q5 ,  cos_q3 * cos_q4 * cos_q5 - sin_q3 * sin_q5 );
+    float Y;
+		Y		= atan2(   sin_q3 * sin_q4, cos_q4 );
+
+
 		float dY =  -pi/2 + q1 + q2;
-		Y = Y+dY;
+		Y = -Y+dY;
 		if(Y>pi) Y -= 2*pi; else if(Y<-pi) Y += 2*pi;
 		_human[0] = x;
 		_human[1] = y;
 		_human[2] = _actuator[0];
-		_human[3] = Y/gain;
-		_human[4] = P/gain;
-		_human[5] = R/gain;
+		_human[3] = Y*gain;
+		_human[4] = P*gain;
+		_human[5] = -R*gain;
 		_human[6] = _actuator[6]; 
 		_human[7] = _actuator[7]; 
+//		led_off();
 
 	}
 
 
-float avatar::module::human_to_actuator(float * _human, float * _actuator, float * _prev){
-	const float pi = robo::pi<float>;
-	const float gain =180.f/pi;
+void avatar::module::human_to_actuator(float * _human, float * _actuator, float * _prev){
+//		led_on();
 	float xg =_human[0];
 	float yg =_human[1];
-	float err = 0.f;
 	
 	float ro2=xg*xg+yg*yg;
 
@@ -1882,11 +1967,12 @@ float avatar::module::human_to_actuator(float * _human, float * _actuator, float
 
 	float Y =_human[3]/gain;
 	float P =_human[4]/gain;
-	float R =_human[5]/gain;
+	float R =-_human[5]/gain;
 	
 	float dY =  pi/2 + q1 + q2;
 	
 	Y = Y - dY;
+	Y = -Y;
 	if(Y>pi) Y -= 2*pi; else if(Y<-pi) Y += 2*pi;
 
 	/*
@@ -1901,31 +1987,37 @@ A2 =
 [ cos(P)*sin(Y), cos(R)*cos(Y) + sin(P)*sin(R)*sin(Y), cos(R)*sin(P)*sin(Y) - cos(Y)*sin(R)]
 [       -sin(P),                        cos(P)*sin(R),                        cos(P)*cos(R)]
 */
-	const float eps = 0.001;
 	float q3 = 0.f;
 	float q4 = 0.f;
 	float q5 = 0.f;
 
-	//первый вариант
-	q4= acos(cos(P)*cos(Y));
-	
-	if( abs(sin(q4)) > eps ){
-		q3 = atan2(cos(P)*sin(Y), sin(P) );
+	float cos_Y =cos(Y);
+	float sin_Y =sin(Y);
+	float cos_P =cos(P);
+	float sin_P =sin(P);
+	float cos_R =cos(R);
+	float sin_R =sin(R);
+
+//первый вариант
+
+  q4= acos(cos_P*cos_Y);
+	if (P>=0) {
+		q4 = -q4;
+	}
+	float sin_q4 = sin(q4);
+	if( sin_q4 > eps ){
+		q3 = atan2( cos_P * sin_Y, -sin_P );
 	}else {
-		q3 = _prev[3]/gain;
+		if( sin_q4 < -eps ){
+			q3 = atan2(-cos_P * sin_Y, sin_P );
+		} else {
+			q3 = _prev[3]/gain;
+		}
 	}
 
-	if( (q3 > robo::pi<float>/2)){
-		q4 = -q4;
-		q3 = q3-robo::pi<float>;
-	} else if (q3 < -robo::pi<float>/2){
-		q4 = -q4;
-		q3 = q3+robo::pi<float>;
-	}
-
-	if( abs(sin(q4)) > eps ){
-		float dx = sin(R)*sin(Y) + cos(R)*cos(Y)*sin(P);
-		float dy =cos(Y)*sin(P)*sin(R) - cos(R)*sin(Y);
+	if( abs(sin_q4) > eps ){
+		float dx = sin_R*sin_Y - cos(R)*cos_Y*sin_P;
+		float dy = -cos_R * sin_Y - cos_Y*sin_P*sin_R;
 		if(q4 < 0 ){
 			dx = -dx;
 			dy = -dy;
@@ -1938,130 +2030,21 @@ A2 =
 	_actuator[0] = _human[2];
 	_actuator[1] = q1*gain;
 	_actuator[2] = q2*gain;
-	_actuator[3] = q3*gain;
-	_actuator[4] = q4*gain;
-	_actuator[5] = q5*gain;
+	
+	if(  angle_score( q3,_prev[3]/gain) &&  angle_score( q4,_prev[4]/gain) && angle_score( q5,_prev[5]/gain)  ){
+		_actuator[3] = q3*gain;
+		_actuator[4] = q4*gain;
+		_actuator[5] = q5*gain;		
+	} else {
+		_actuator[3] = _prev[3];
+		_actuator[4] = _prev[4];
+		_actuator[5] = _prev[5];		
+	}
+	
 	_actuator[6] = _human[6];
 	_actuator[7] = _human[7];
-	
-/*	float zg =_human[2];
-	float T =_human[3]/gain;
-	float P =_human[4]/gain;
-	float R =_human[5]/gain;
-	float L1= instance().gm.L1;
-	float L2= instance().gm.L2;
-	float L3= instance().gm.L3;
-	float L5= instance().gm.L5;
+//	led_off();
 
-	float Y; 
-	if( abs(cos(P))<0.001 ){
-		Y = 0;		
-	} else {
-		Y = atan2(- sin(R) * sin(P), cos(R) );;
-	}
-	union{
-		struct{
-			float q0;
-			float q1;
-			float q2;
-			float q3;
-			float q4;
-			float q5;
-		};
-		float Q[6];
-	};
-	q5 =atan2(sin(R)*sin(Y) - cos(R)*cos(Y)*sin(P), cos(P)*cos(Y) );
-	q4 = atan2( cos(P)*sin(R), cos(R)*cos(Y) - sin(P)*sin(R)*sin(Y) );
-
-	float f3 = T + robo::pi<float>/2 - Y;
-
-	q0 = zg;
-	float ro2=xg*xg+yg*yg;
-
-	float ro = sqrt(ro2);
-	float alfa;
-	if(ro>=L1+L2){
-		alfa=robo::pi<float>;
-		ro = L1+L2;
-	}else{
-		#ifdef RIGHT_HAND
-		alfa= acos( (L1*L1 + L2*L2 - ro2) / (2*L1*L2) );
-		#endif
-		#ifdef LEFT_HAND
-		alfa= -acos( (L1*L1 + L2*L2 - ro2) / (2*L1*L2) );
-		#endif
-	}
-	q2 = robo::pi<float> - alfa;
-	float beta = asin( sin(alfa)/ro*L2);
-	#ifdef POINT_IN_THE_GRAB
-	float gama= atan2(yr,xr);
-	#endif
-	#ifdef POINT_IN_THE_WIRST
-	float gama= atan2(yg,xg);
-	#endif
-	q1 = gama-beta;
-	q3 = f3- q1 - q2;
-
-	float dx4t = L5*cos(q5)+L3;
-	float dy4t = L5*sin(q4)*sin(q5);
-	float dzt = -L5*cos(q4)*sin(q5);
-
-	float f1t = q1;
-	float f2t = f1t + q2;
-	float f3t = f1t + q2 + q3;
-
-	float dx3t = dx4t * cos(f3) - dy4t *sin(f3);
-	float dy3t = dx4t * sin(f3) + dy4t *cos(f3);
-
-	float xt = L1 * cos(f1t) +L2 * cos(f2t)  + dx3t;
-	float yt = L1 * sin(f1t) +L2 * sin(f2t)  + dy3t;
-	float zt = q0 + dzt;
-
-	float Pt = asin(-cos(q4)*sin(q5));
-	float Rt = atan2( sin(q4), cos(q4)*cos(q5));
-	float Yt = atan2( sin(q4)*sin(q5), cos(q5) );
-	float Y2 = atan2(- sin(R) * sin(P), cos(R) );
-	float Tt = Y + f3 - robo::pi<float>/2;
-	float err = (abs(xt-xg)+abs(yt-yg)+abs(zt-zg))/700 + (abs(Pt-P)+abs(Rt-R)+abs(Tt-T))/3.14;
-
-	for(int i=0;i<5;++i){
-		float tmp = Q[i];
-		if(tmp>robo::pi<float> ) Q[i] = tmp -2*robo::pi<float>;
-		if(tmp<-robo::pi<float> ) Q[i] = tmp +2*robo::pi<float>;
-	}
-	
-	#ifdef RIGHT_HAND
-	_actuator[1] = -q1*gain;
-	#endif
-	#ifdef LEFT_HAND
-	float tmp = -q1*gain-180;
-	if(tmp>180) tmp = tmp-360;
-	if(tmp<-180) tmp = tmp+360;
-	_actuator[1] = tmp;
-	#endif
-	
-	_actuator[2] = -q2*gain;
-	#ifdef RIGHT_HAND
-	_actuator[3] = -q3*gain;
-	#endif
-	#ifdef LEFT_HAND
-	_actuator[4] = q3*gain;
-	#endif
-	
-	_actuator[4] = q4*gain;
-
-	#ifdef RIGHT_HAND
-	_actuator[5] = q5*gain;
-	#endif
-	#ifdef LEFT_HAND
-	_actuator[5] = -q5*gain;
-	#endif
-
-	_actuator[6] = _human[6];
-	_actuator[7] = _human[7]; 
-*/
-	return err;
-	
 }
 
 
