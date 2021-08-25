@@ -23,3 +23,4 @@
 */
 
 #include <string.h>
+//#define robo_errlog(f,...) 

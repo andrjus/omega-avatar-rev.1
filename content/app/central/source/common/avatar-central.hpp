@@ -66,24 +66,43 @@ namespace avatar{
 		};
 	};
 	
+	struct coordDesc{
+		robo::string caption;
+		struct{
+			struct{
+				float min = -90.f;
+				float max = 90.f;
+			} required;
+			struct{
+				float min = -180.f;
+				float max = 180.f;
+			} actual;
+		} range;
+		float actual = 0.f;
+	};
+	enum  class states { 
+			BOOTING = 0  // Ч манипул€тор инициализируютс€
+			, READY = 1 // Ч манипул€тор готов к работе
+			, NOT_CALIBRATED = 2// Ч манипул€тор не откалиброван
+			, CALIBRATING = 3 // Ч манипул€тор калибруетс€
+			,	SHUTTING_DOWN = 4// Ч манипул€тор выключаетс€ (после команды SHUTDOWN)
+			, OFF = 5// Ч манипул€тор готов к выключению (после команды SHUTDOWN)
+			, MOVING = 6// Ч манипул€тор выполн€ет движение
+			, FAIL = 7//Ч на манипул€торе обнаружена устранима€ ошибка (требуетс€ посылка команды RESET)
+			, ERROR = 8// Ч на манипул€торе обнаружена неустранима€ ошибка. “ребуетс€ перезагрузить манипул€тор (нужно сначала попробовать команду REBOOT 
+			, POWER_OFF = 9// Ч у манипул€тора вырублено питание приводов
+			, POWER_ON = 10// Ч у манипул€тора вырублено питание приводов
+			, COUNT = POWER_ON+1
+		};
+	struct coordDescs{
+		typedef  avatar::states states;
+		states state;
+		enum {count = 7};
+		coordDesc descs[count];
+	};
 	struct status{
+		typedef  avatar::states states;
 		point pt;
-		
-			enum  class states { 
-				BOOTING = 0  // Ч манипул€тор инициализируютс€
-				, READY = 1 // Ч манипул€тор готов к работе
-				, NOT_CALIBRATED = 2// Ч манипул€тор не откалиброван
-				, CALIBRATING = 3 // Ч манипул€тор калибруетс€
-				,	SHUTTING_DOWN = 4// Ч манипул€тор выключаетс€ (после команды SHUTDOWN)
-				, OFF = 5// Ч манипул€тор готов к выключению (после команды SHUTDOWN)
-				, MOVING = 6// Ч манипул€тор выполн€ет движение
-				, FAIL = 7//Ч на манипул€торе обнаружена устранима€ ошибка (требуетс€ посылка команды RESET)
-				, ERROR = 8// Ч на манипул€торе обнаружена неустранима€ ошибка. “ребуетс€ перезагрузить манипул€тор (нужно сначала попробовать команду REBOOT 
-				, POWER_OFF = 9// Ч у манипул€тора вырублено питание приводов
-				, POWER_ON = 10// Ч у манипул€тора вырублено питание приводов
-				, COUNT = POWER_ON+1
-			};
-		
 		states state;		
 	};
 	
@@ -99,5 +118,6 @@ namespace avatar{
 	bool load_state(uint32_t & _dst);
 	void led_on(void);
 	void led_off(void);
+	void query_config(coordDescs & _coordDescs);
 }
 #endif

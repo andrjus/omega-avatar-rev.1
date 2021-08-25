@@ -72,7 +72,8 @@ namespace avatar{
 			} actual;
 			
 			float calibrate_position = 0.f;
-			uint32_t homing_ofset = 0.f;
+			uint32_t homing_ofset = 0;
+			uint16_t pwm_limit = 0;
 			struct{
 				robo::converter * position;
 			} converters;
@@ -85,6 +86,7 @@ namespace avatar{
 				ROBO_LBREAKN( robo::ini::load(name(),RT("calibrate_position"),calibrate_position));
 				ROBO_LBREAKN( robo::ini::load(name(),RT("position_dead_zone"),position_dead_zone));
 				ROBO_LBREAKN( robo::ini::load(name(),RT("homing_ofset"),homing_ofset));
+				ROBO_LBREAKN( robo::ini::load(name(),RT("pwm_limit"),pwm_limit));
 				return true;
 			}
 			
@@ -99,7 +101,8 @@ namespace avatar{
 
 		};
 		
-		class Dynamixel: public actuator {			
+		class Dynamixel: public actuator {		
+			friend class module;			
 			::robo::delegat::smember<Dynamixel, void, ::robo::frontend::contrltable::ivar& , bool > startup_confirm_;
 			::robo::delegat::smember<Dynamixel, void, ::robo::frontend::contrltable::ivar& , bool> snapshot_update_;
 			::robo::delegat::smember<Dynamixel, void, ::robo::frontend::contrltable::ivar& , bool> configure_complete_;
@@ -140,7 +143,7 @@ namespace avatar{
 			real  position_min_;
 			uint32  home_offset_;
 			uint8 bitrate_;
-			
+			uint16 pwm_limit_;
 			void startup_confirm__( ::robo::frontend::contrltable::ivar& _var, bool _result){
 				if(_result){
 					if( 
@@ -165,6 +168,7 @@ namespace avatar{
 
 						if ( power_.try_post(0, startup_confirm_)  != robo::result::complete ) return ;
 						
+						if( pwm_limit_.try_post(pwm_limit,startup_confirm_) != robo::result::complete  )return ;
 					//	if( home_offset_.try_post(homing_ofset,startup_confirm_) != robo::result::complete  )return ;
 						
 						if( position_min_.conv() && position_min_.conv()->scale() >0 ){
@@ -247,6 +251,7 @@ namespace avatar{
 				, speed_int_gain_(contrltable_,"VELOCITY_I_GAIN")
 				, home_offset_(contrltable_,"HOMING_OFFSET")
 				, bitrate_(contrltable_,"BAUD_RATE")
+				, pwm_limit_(contrltable_,"PWM_LIMIT")
 			{
 			}
 			
@@ -277,6 +282,7 @@ namespace avatar{
 			}*/
 
 			virtual void start_configure(void){
+				
 				ROBO_ALARMN(contrltable_.query(startup_confirm_));
 			}
 			virtual robo::result do_configure(void){
@@ -314,11 +320,11 @@ namespace avatar{
 		};
 
 		class Z : public actuator {			
+			friend class module;
 		
 			::robo::delegat::smember<Z, void, bool > startup_confirm_;
 			::robo::delegat::smember<Z, void, bool > configure_complete_;
 			::robo::delegat::smember<Z, void, bool > update_complete_;
-			friend class module;
 
 			union exchange_data{
 				struct {
@@ -527,7 +533,9 @@ namespace avatar{
 		virtual robo::result do_shutdown(void){
 			return  in_msg_.actuator_active == 0? robo::result::complete :robo::result::resume;
 		}
-		
+		void post_config(void){
+		}
+	
 	};				
 		
 	class hand: public ::robo::backend::boardagent{ 
@@ -671,11 +679,12 @@ namespace avatar {
 		uint8_t out_buffer[64];
 		robo::ring_t<3, msg *> messages_;
 		robo::net::master & channel_;
+
 	protected:
 		virtual bool do_load(void){
 			ROBO_LBREAKN( ::robo::backend::bus::do_load()) ;
 			static uint8_t tran_data[1][234];
-			for (int i = 0; i < 1; i++){
+			for (int i = 0; i < 1; ++i){
 				msg * tmp = new msg;
 				tmp->tran.size_max = 234;
 				tmp->tran.data = tran_data[i];
@@ -784,6 +793,11 @@ namespace avatar {
 			}
 	public:
 		dynamixel_bus(  robo::cstr _name, robo::net::master & _channel  );
+		/*void reboot(void){
+			enum{sz = }
+			static uint8_t cmd[] = {0xFF,	0xFF,	0xFD,	0x00,	0x01,	0x03,	0x00,	0x08,	0xFF,	0xFF};
+				channel_.exchange(out_buffer,sz, &(in_buffer[0]),11,&confirm_delegat);
+		}*/
 	};
 	
 	class can8_bus: public robo::backend::bus {
@@ -923,6 +937,7 @@ namespace avatar {
 			
 			//robo::system::printf(RT("\033[0;0H"));
 			robo::system::printf(RT("\n\r                                                       \r"));			
+			robo::system::printf(RT("\n\r                                                       \r"));			
 
 			for(int i=0;i<count; ++i){
 				robo::system::printf(RT("%s\t"), actuators[i]->alias());
@@ -997,7 +1012,7 @@ namespace avatar {
 		}
 		void for_all( void (actuator::* _f )(void) ) {
 			actuator * * p=actuators;
-			for(int i=0;i<count; i++, p++){
+			for(int i=0;i<count; ++i, ++p){
 				if(*p){
 				((*p)->*_f)();
 				}
@@ -1007,7 +1022,7 @@ namespace avatar {
 		robo::result do_all( robo::result (actuator::* _f )(void) ) {
 			robo::result r = robo::result::complete;
 			actuator * * p=actuators;
-			for(int i=0;i<count; i++, p++){
+			for(int i=0;i<count; ++i, ++p ){
 				if(*p){
 					switch( ((*p)->*_f)()){
 						case robo::result::resume:
@@ -1057,7 +1072,7 @@ namespace avatar {
 
 		void set_calibrate_position(void){
 			actuator ** p = actuators;			
-			for(int i=0;i<count; i++, p++){
+			for(int i=0;i<count; ++i, ++p){
 				if(*p) {
 					actuator_req_[i] = (*p)->actual.action.position =  (*p)->calibrate_position;
 				} else {
@@ -1098,7 +1113,7 @@ namespace avatar {
 
 		void get_actual_position(void){
 			actuator ** p = actuators;			
-			for(int i=0;i<count; i++, p++){
+			for(int i=0;i<count; ++i, ++p){
 				if(*p) {
 					actuator_actual_[i] = (*p)->actual.feedback.position;
 				} else {
@@ -1110,7 +1125,7 @@ namespace avatar {
 		
 		void hold_position(void){
 			actuator ** p = actuators;			
-			for(int i=0;i<count; i++, p++){
+			for(int i=0;i<count; ++i, ++p){
 				if(*p) {
 					actuator_req_[i] = (*p)->actual.action.position =  actuator_actual_[i];
 				} else {
@@ -1118,17 +1133,17 @@ namespace avatar {
 				}
 			}
 			actuator_to_human( &actuator_req_[0], &human_req_[0]);
-			for(int i=0;i<count; i++, p++){
+			for(int i=0;i<count; ++i, ++p){
 				human_deseired_[i] = human_req_[i];
 			}
-			for(int i=0;i<count; i++, p++){
+			for(int i=0;i<count; ++i, ++p){
 				human_actual_prev_[i] = human_req_[i];
 			}
 		}
 		
 		void set_req_position(void){
 			actuator ** p = actuators;			
-			for(int i=0;i<count; i++, p++){
+			for(int i=0;i<count; ++i, ++p){
 				if(*p) {
 					(*p)->actual.action.position  =  actuator_req_[i];
 				} 
@@ -1167,7 +1182,7 @@ namespace avatar {
 				}*/
 				float ro[count];
 				float mro = 0;
-				for(int i=0; i<count;i++){
+				for(int i=0; i<count;++i){
 					ro[i] = human_req_[i] - human_deseired_[i];
 					mro +=  (ro[i]*ro[i]);
 				}
@@ -1176,7 +1191,7 @@ namespace avatar {
 				if(mro>1.f){
 					float norm[count];
 					//float V0 = 0;
-					for(int i=0; i<count;i++){
+					for(int i=0; i<count;++i){
 						norm[i] =  ro[i]/mro;
 						//V0 += human_actual_speed_[i]*norm[i];
 					}		
@@ -1207,14 +1222,15 @@ namespace avatar {
 						}
 						step = V0*dt - Amax*dt*dt/2;						
 					}*/
-					for(int i=0;i<6;i++){
+					for(int i=0;i<3;++i){
 						human_deseired_[i] = human_deseired_[i] + step*norm[i];
 					}
 					/*for(int i=0;i<count;i++){
 						human_deseired_[i] = human_req_[i];
 					}*/
-					human_deseired_[6] = human_req_[6];
-					human_deseired_[7] = human_req_[7];
+					for(int i=3;i<8;++i){
+						human_deseired_[i] = human_req_[i];
+					}
 				}
 				human_to_actuator(&human_deseired_[0], &actuator_req_[0],&actuator_actual_[0]);
 				set_req_position();
@@ -1544,7 +1560,45 @@ namespace avatar {
 			if(mode_ != mode::off){
 				command_ = command::power_on;			
 			}
-		}		
+		}
+		::avatar::states statesToInt(mode _mode){
+			switch(_mode){
+				case mode::booting: 
+				case mode::configure:
+				case mode::idle:
+				case mode::restore:
+					return status::states::BOOTING;
+				break;
+				case mode::not_calibrated:
+					return status::states::NOT_CALIBRATED;
+				break;
+				case mode::prepare_calibrate:
+				case mode::calibrate:
+					return status::states::CALIBRATING;
+				break;
+				case mode::ready:
+					return status::states::READY;
+				break;
+				case mode::moving:
+					return status::states::MOVING;
+				break;
+				case mode::panic:
+					return status::states::FAIL;
+				break;
+				case mode::power_off:
+				case mode::power_down:
+					return status::states::POWER_OFF;
+				break;
+				case mode::start_shutdown:
+				case mode::shutdown:
+				break;
+				case mode::off:
+					return status::states::OFF;
+				break;
+			}
+			return status::states::BOOTING;
+		}
+		
 		void query_status_(status & _status){
 			mode tmp;
 			{
@@ -1552,39 +1606,67 @@ namespace avatar {
 				tmp = mode_;
 				std::copy_n(human_actual_,7,_status.pt.values);
 			}
-			switch(tmp){
-				case mode::booting: 
-				case mode::configure:
-				case mode::idle:
-				case mode::restore:
-					_status.state = status::states::BOOTING;
-				break;
-				case mode::not_calibrated:
-					_status.state = status::states::NOT_CALIBRATED;
-				break;
-				case mode::prepare_calibrate:
-				case mode::calibrate:
-					_status.state = status::states::CALIBRATING;
-				break;
-				case mode::ready:
-					_status.state = status::states::READY;
-				break;
-				case mode::moving:
-					_status.state = status::states::MOVING;
-				break;
-				case mode::panic:
-					_status.state = status::states::FAIL;
-				break;
-				case mode::power_off:
-				case mode::power_down:
-					_status.state = status::states::POWER_OFF;
-				break;
-				case mode::start_shutdown:
-				case mode::shutdown:
-				break;
-				case mode::off:
-					_status.state = status::states::OFF;
-				break;
+			_status.state = statesToInt(tmp);
+		}
+		
+		void query_config_(coordDescs & _coordDescs){
+			robo::system::guard g__;
+			_coordDescs.state = statesToInt(mode_);
+			if( mode_ != mode::booting ){
+				/*actuator ** p = actuators;			
+				coordDesc * d = &_coordDescs.descs[0];
+				for(int i=0;i<count; ++i, ++p, ++d){
+					d->caption =a->name();
+					d->range.actual.min = (*p)->converters.position->min();
+					d->range.actual.max = (*p)->converters.position->max();
+					d->actual = (*p)->actual.feedback.position;
+				}*/
+				coordDesc * d = &_coordDescs.descs[0];
+				float * a = human_actual_;
+				d->caption = "X";
+				d->range.actual.min = d->range.required.min = -600.f;
+				d->range.actual.max = d->range.required.max = 600.f;
+				d->actual = *a++;		d++;
+
+				d->caption = "Y";
+				d->range.actual.min = d->range.required.min = -600.f;
+				d->range.actual.max = d->range.required.max = 600.f;
+				d->actual = *a++;		d++;
+
+				d->caption = "Z";
+				d->range.required.min = z_1_.converters.position->min();
+				d->range.required.max = z_1_.converters.position->max();
+				d->range.actual.min = 0;
+				d->range.actual.max = 500;
+				d->actual = *a++;		d++;
+
+				d->caption = "YAW";
+				d->range.actual.min = -180.f;
+				d->range.actual.max = 180.f;
+				d->range.required.min = -89.5f;
+				d->range.required.max = 89.5f;
+				d->actual = *a++;		d++;
+				
+				d->caption = "PITCH";
+				d->range.actual.min = -180.f;
+				d->range.actual.max = 180.f;
+				d->range.required.min = -89.5f;
+				d->range.required.max = 89.5f;
+				d->actual = *a++;		d++;
+
+				d->caption = "ROLL";
+				d->range.actual.min = -180.f;
+				d->range.actual.max = 180.f;
+				d->range.required.min = -175.f;
+				d->range.required.max = 175.f;
+				d->actual = *a++;		d++;
+
+				d->caption = "GRAB";
+				d->range.actual.min = 0.f;
+				d->range.actual.max = 255.f;
+				d->range.required.min = 0.f;
+				d->range.required.max = 255.f;
+				d->actual = *a++;		d++;
 			}
 		}
 		void reset_(void){
@@ -1637,7 +1719,9 @@ namespace avatar {
 		static void query_status(status & _status){
 			instance().query_status_(_status);
 		}
-
+		static void query_config(coordDescs & _coordDescs){
+			instance().query_config_(_coordDescs);
+		}
 	};
 	
 	dynamixel_bus::dynamixel_bus( robo::cstr _name, robo::net::master & _channel  )
@@ -1702,7 +1786,7 @@ unsigned short update_crc(unsigned short crc_accum, unsigned char *data_blk_ptr,
         0x8213, 0x0216, 0x021C, 0x8219, 0x0208, 0x820D, 0x8207, 0x0202
     };
 
-    for(j = 0; j < data_blk_size; j++)
+    for(j = 0; j < data_blk_size; ++j)
     {
         i = ((unsigned short)(crc_accum >> 8) ^ data_blk_ptr[j]) & 0xFF;
         crc_accum = (crc_accum << 8) ^ crc_table[i];
@@ -1830,6 +1914,11 @@ void avatar::stop(void){
 void avatar::query_status(avatar::status & _status){
 	module::query_status(_status);
 }
+
+void avatar::query_config(coordDescs & _coordDescs){
+	module::query_config(_coordDescs);
+}
+
 void avatar::reset(void){
 	module::reset();
 }
@@ -1918,7 +2007,7 @@ void avatar::module::actuator_to_human(float * _actuator, float * _human){
 
 
 		float dY =  -pi/2 + q1 + q2;
-		Y = -Y+dY;
+		Y = Y+dY;
 		if(Y>pi) Y -= 2*pi; else if(Y<-pi) Y += 2*pi;
 		_human[0] = x;
 		_human[1] = y;
@@ -1960,19 +2049,21 @@ void avatar::module::human_to_actuator(float * _human, float * _actuator, float 
 	}
 	
 	float fi_ro = atan2(yg,xg);
+	if(fi_ro<0)
+		fi_ro =2*pi+fi_ro;
 	
 	float q2 = -(pi - alfa) + df;
 	
-	float q1 = -pi +  fi_ro + beta -df;
+	float q1 =  fi_ro + beta -df;
 
 	float Y =_human[3]/gain;
 	float P =_human[4]/gain;
 	float R =-_human[5]/gain;
 	
-	float dY =  pi/2 + q1 + q2;
+	float dY =  -pi/2 + q1 + q2;
 	
 	Y = Y - dY;
-	Y = -Y;
+	
 	if(Y>pi) Y -= 2*pi; else if(Y<-pi) Y += 2*pi;
 
 	/*
@@ -2028,7 +2119,9 @@ A2 =
 	}
 	
 	_actuator[0] = _human[2];
-	_actuator[1] = q1*gain;
+	#ifdef LEFT_HAND
+	_actuator[1] = (q1-pi)*gain;
+	#endif
 	_actuator[2] = q2*gain;
 	
 	if(  angle_score( q3,_prev[3]/gain) &&  angle_score( q4,_prev[4]/gain) && angle_score( q5,_prev[5]/gain)  ){

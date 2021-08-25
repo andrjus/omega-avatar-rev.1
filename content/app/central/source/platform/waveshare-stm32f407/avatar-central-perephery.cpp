@@ -35,7 +35,8 @@ class dynamixel_UART4 ;
 class dynamixel_UART5 ;
 bool nand_file_system_build_(void);
 void command_poll(void);
-enum {transport_buffers_count_shift =5, transport_buffers_count=1<<transport_buffers_count_shift};
+void send_config(void);
+enum {transport_buffers_count_shift =7, transport_buffers_count=1<<transport_buffers_count_shift};
 struct transport_buffer{
 	uint8_t memo[32];
 	int  space=0;
@@ -50,11 +51,12 @@ uint8_t * pUART3_BUFFER = UART3_BUFFER;
 uint8_t  tmp_uart;
 size_t  UART3_BUFFER_COUNT = 0;
 size_t UART3_ACTUAL_SIZE=0;
+bool UART3_ABORT = false;
 void transport_poll(void);
 transport_buffer * transport_buffer_query(void){
 	if( robo::system::env::is_frontend() ){
 		int cnt = 0;
-		do{
+/*		do{
 			{
 				robo::system::guard g__;
 				cnt = transport_buffers_pool_.count();
@@ -63,7 +65,7 @@ transport_buffer * transport_buffer_query(void){
 				HAL_PCD_IRQHandler(&hpcd_USB_OTG_FS);
 			}
 			transport_poll();
-		} while(cnt<1);
+		} while(cnt<1);*/
 	} 
 	robo::system::guard g__;
 	if(transport_buffers_pool_.count()>0){
@@ -113,7 +115,7 @@ void transport_poll(void){
 #if ROBO_UNICODE_ENABLED == 1
 #include <wchar.h>
 #endif
-#define PERSISTENT_INI 0
+#define PERSISTENT_INI 1
 
 #if  PERSISTENT_INI == 0
 bool build_default_ini_(void);
@@ -601,6 +603,7 @@ int avatar_central_begin(void){
 	for(int i=0;i<transport_buffers_count;++i,++tmp){
 		transport_buffer_release(tmp);
 	}
+//	ROBO_LBREAKN( robo::app::machine::begin(AVATAR_INI_FILE));
 	ROBO_BREAKN( robo::app::machine::begin(AVATAR_INI_FILE, robo::termial::print),1 );
 	//ROBO_BREAKN( robo::app::machine::begin("default-servo-2.ini"),1 );
 	robo::app::machine::start();	
@@ -626,6 +629,11 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 		avatar::dynamixel_rs485_channel::confirm();
 	}
 	else if(huart==&huart3){
+		if(UART3_ABORT){
+			if(tmp_uart == '\n'){
+				UART3_ABORT = false;
+			}
+		} else {
 		if( UART3_BUFFER_COUNT<UART3_BUFFER_SIZE ){
 			UART3_BUFFER_COUNT++;
 			*pUART3_BUFFER++ = tmp_uart;
@@ -640,6 +648,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 			pUART3_BUFFER = UART3_BUFFER;
 			UART3_BUFFER_COUNT = 0;
 		}
+	}
 		UART_Start_Receive_IT(&huart3,&tmp_uart,1);
 		//UART3_BUFFER[20]=0;
 		//robo::system::printf(RT("%s"),UART3_BUFFER);
@@ -693,6 +702,13 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart){
 		avatar::dynamixel_TTL_channel::refuse();
 	} else if(huart==&huart5){
 		avatar::dynamixel_rs485_channel::refuse();
+	} else if(huart==&huart3){
+			pUART3_BUFFER = UART3_BUFFER;
+			UART3_BUFFER_COUNT = 0;
+			UART3_ACTUAL_SIZE = 0;
+			UART3_ABORT = true;
+			UART_Start_Receive_IT(&huart3,&tmp_uart,1);
+		
 	}
 }
 
@@ -826,15 +842,15 @@ bool build_default_ini_(void){
 
 		"[yaw-3_position_co]\n"
 		"min=-170\n"
-		"max=15\n"
+		"max=0\n"
 		"offset=-316,4\n"
 		"scale=11.375\n"
 		
 		"[roll-4_position_co]\n"
-		"min=-89\n"
-		"max=89\n"
-		"offset=89.6\n"
-		"scale=-22.766\n"
+		"min=-87\n"
+		"max=91\n"
+		"offset=-87.94\n"
+		"scale=22.766\n"
 
 		"[pitch-5_position_co]\n"
 		"min=-95\n"
@@ -843,10 +859,10 @@ bool build_default_ini_(void){
 		"scale=22.766\n"
 
 		"[roll-6_position_co]\n"
-		"min=-130\n"
+		"min=-180\n"
 		"max=130\n"
-		"offset=226.5\n"
-		"scale=-11.375\n"
+		"offset=-222.9\n"
+		"scale=11.375\n"
 
 		"[grab-7_position_co]\n"
 		"min=0\n"
@@ -873,7 +889,7 @@ bool build_default_ini_(void){
 		"DEFAULT_TIMEOUT_US=5000\n"
 
 		"[hand]\n"
-		"REQUEST_PAUSE_US=0 #rx485 proto unswering after delay\n"
+		"REQUEST_PAUSE_US=500 #rx485 proto unswering after delay\n"
 
 		"[grab]\n"
 		"REQUEST_PAUSE_US=0 #TTL proto unswering after delay\n"
@@ -1221,68 +1237,198 @@ int content::error_callback(jsonsl_t jsn,
         jsonsl_char_t *at){
 	return content_.error_callback_(error,state,at);
 }
-
+static robo::cstr  status_names[ 10 ] = {
+	RT("BOOTING")
+	, RT("READY")
+	, RT("NOT_CALIBRATED")
+	, RT("CALIBRATING")
+	,	RT("SHUTTING_DOWN")
+	, RT("OFF = 5")
+	, RT("MOVING")
+	, RT("FAIL")
+	, RT("ERROR")
+	, RT("POWER OFF")
+};
 void send_status(void){
-				avatar::status status;
-				avatar::query_status(status);
-				static robo::char_t answer[] = {
-						"{"
-							"\"command\": \"STATUS\","
-							"\"timestamp\": \"%s\","
-							"\"data\": {"
-									"\"status\": \"%s\","
-									"\"description\": \"%s\","
-									"\"arm\": {"
-										 "\"arm\": %d,"
-										 "\"pos\": {"
-													"\"x\": %2.2f,"
-													 "\"y\": %2.2f,"
-													 "\"z\": %2.2f"
-										 "},"
-										 "\"rot\": {"
-													"\"r\": %2.2f,"
-													"\"p\": %2.2f,"
-													"\"y\": %2.2f,"
-										 "},"
-											"\"fingers\": [%2.2f, %2.2f, %2.2f, %2.2f, %2.2f]"
-									"}"
-							"}"
-					"}\n"
-				};
-				static robo::cstr  status_names[ 10 ] = {
-					RT("BOOTING")
-					, RT("READY")
-					, RT("NOT_CALIBRATED")
-					, RT("CALIBRATING")
-					,	RT("SHUTTING_DOWN")
-					, RT("OFF = 5")
-					, RT("MOVING")
-					, RT("FAIL")
-					, RT("ERROR")
-					, RT("POWER OFF")
-				};
-				int no = (int )status.state;
-				size_t sz = robo::system::sprintf(
-					(robo::char_t*)UART3_TX_BUFFER
-					,UART3_BUFFER_SIZE
-					,answer
-					, content_.timestamp
-					, status_names[no]
-					,	RT("We're moving! Dhat's funny!")
-					, 0 // arm
-					, status.pt.pos.x
-					, status.pt.pos.y
-					, status.pt.pos.z
-					, status.pt.rot.r
-					, status.pt.rot.p
-					, status.pt.rot.y
-					, status.pt.fingers[0]
-					, status.pt.fingers[1]
-					, status.pt.fingers[2]
-					, status.pt.fingers[3]
-					, status.pt.fingers[4]
-				);
-				HAL_UART_Transmit_DMA(&huart3, UART3_TX_BUFFER,sz);	
+	avatar::status status;
+	avatar::query_status(status);
+	static robo::char_t answer[] = {
+			"{"
+				"\"command\": \"STATUS\","
+				"\"timestamp\": \"%s\","
+				"\"data\": {"
+						"\"status\": \"%s\","
+						"\"description\": \"%s\","
+						"\"arm\": {"
+							 "\"arm\": %d,"
+							 "\"pos\": {"
+										"\"x\": %2.2f,"
+										 "\"y\": %2.2f,"
+										 "\"z\": %2.2f"
+							 "},"
+							 "\"rot\": {"
+										"\"r\": %2.2f,"
+										"\"p\": %2.2f,"
+										"\"y\": %2.2f"
+							 "},"
+								"\"fingers\": [%2.2f, %2.2f, %2.2f, %2.2f, %2.2f]"
+						"}"
+				"}"
+		"}\n"
+	};
+
+	int no = (int )status.state;
+	size_t sz = robo::system::sprintf(
+		(robo::char_t*)UART3_TX_BUFFER
+		,UART3_BUFFER_SIZE
+		,answer
+		, content_.timestamp
+		, status_names[no]
+		,	RT("We're moving! Dhat's funny!")
+		, 0 // arm
+		, status.pt.pos.x
+		, status.pt.pos.y
+		, status.pt.pos.z
+		, status.pt.rot.r
+		, status.pt.rot.p
+		, status.pt.rot.y
+		, status.pt.fingers[0]
+		, status.pt.fingers[1]
+		, status.pt.fingers[2]
+		, status.pt.fingers[3]
+		, status.pt.fingers[4]
+	);
+	HAL_UART_Transmit_DMA(&huart3, UART3_TX_BUFFER,sz);	
+}
+
+void send_config(void){
+	avatar::coordDescs coordDescs;
+	avatar::query_config(coordDescs);
+
+	static robo::char_t coord_s[] = 
+	"{"
+		"\"caption\":\"%s\","
+		"\"range\":{"
+			"\"actual\":{"
+				"\"min\":%2.2f,"
+				"\"max\":%2.2f"
+			"},"
+			"\"required\":{"
+				"\"min\":%2.2f,"
+				"\"max\":%2.2f"
+				 "}"
+		"},"
+		"\"actual\":%2.2f"
+	"}";
+	static robo::char_t config_s[] = 
+		"{\"command\":\"CONFIG\""
+		",\"status\":\"%s\""
+		",\"coords\":[%s, %s, %s, %s, %s, %s, %s ]}\n";
+	
+	
+	size_t sz = robo::system::sprintf(
+		(robo::char_t*)UART3_TX_BUFFER
+		,UART3_BUFFER_SIZE
+		,config_s
+		,status_names[(int)coordDescs.state]
+		, robo::string  (
+				coord_s
+				, coordDescs.descs[0].caption.c_str()
+				,	coordDescs.descs[0].range.actual.min
+				,	coordDescs.descs[0].range.actual.max
+				,	coordDescs.descs[0].range.required.min
+				,	coordDescs.descs[0].range.required.max
+				,	coordDescs.descs[0].actual
+			).c_str()
+		, robo::string  (
+				coord_s
+				, coordDescs.descs[1].caption.c_str()
+				,	coordDescs.descs[1].range.actual.min
+				,	coordDescs.descs[1].range.actual.max
+				,	coordDescs.descs[1].range.required.min
+				,	coordDescs.descs[1].range.required.max
+				,	coordDescs.descs[1].actual
+			).c_str()
+		, robo::string  (
+				coord_s
+				, coordDescs.descs[2].caption.c_str()
+				,	coordDescs.descs[2].range.actual.min
+				,	coordDescs.descs[2].range.actual.max
+				,	coordDescs.descs[2].range.required.min
+				,	coordDescs.descs[2].range.required.max
+				,	coordDescs.descs[2].actual
+			).c_str()
+			, robo::string  (
+				coord_s
+				, coordDescs.descs[3].caption.c_str()
+				,	coordDescs.descs[3].range.actual.min
+				,	coordDescs.descs[3].range.actual.max
+				,	coordDescs.descs[3].range.required.min
+				,	coordDescs.descs[3].range.required.max
+				,	coordDescs.descs[3].actual
+			).c_str()
+		, robo::string  (
+				coord_s
+				, coordDescs.descs[4].caption.c_str()
+				,	coordDescs.descs[4].range.actual.min
+				,	coordDescs.descs[4].range.actual.max
+				,	coordDescs.descs[4].range.required.min
+				,	coordDescs.descs[4].range.required.max
+				,	coordDescs.descs[4].actual
+			).c_str()
+		, robo::string  (
+				coord_s
+				, coordDescs.descs[5].caption.c_str()
+				,	coordDescs.descs[5].range.actual.min
+				,	coordDescs.descs[5].range.actual.max
+				,	coordDescs.descs[5].range.required.min
+				,	coordDescs.descs[5].range.required.max
+				,	coordDescs.descs[5].actual
+			).c_str()
+		, robo::string  (
+				coord_s
+				, coordDescs.descs[6].caption.c_str()
+				,	coordDescs.descs[6].range.actual.min
+				,	coordDescs.descs[6].range.actual.max
+				,	coordDescs.descs[6].range.required.min
+				,	coordDescs.descs[6].range.required.max
+				,	coordDescs.descs[6].actual
+			).c_str()
+		);
+	
+	/*robo::string answer(
+		config_s
+		, robo::string( 
+				coord_s
+				,coordDescs.descs[0].range).c_str()
+		)
+	
+	);*/
+	
+	
+
+	/*int no = (int )status.state;
+	size_t sz = robo::system::sprintf(
+		(robo::char_t*)UART3_TX_BUFFER
+		,UART3_BUFFER_SIZE
+		,answer
+		, content_.timestamp
+		, status_names[no]
+		,	RT("We're moving! Dhat's funny!")
+		, 0 // arm
+		, status.pt.pos.x
+		, status.pt.pos.y
+		, status.pt.pos.z
+		, status.pt.rot.r
+		, status.pt.rot.p
+		, status.pt.rot.y
+		, status.pt.fingers[0]
+		, status.pt.fingers[1]
+		, status.pt.fingers[2]
+		, status.pt.fingers[3]
+		, status.pt.fingers[4]
+	);*/
+	HAL_UART_Transmit_DMA(&huart3, UART3_TX_BUFFER,sz);	
 }
 
 void command_poll(void){
@@ -1295,24 +1441,33 @@ void command_poll(void){
 	if(size>0){
 		//за такое убивать на месте
 		content_.encode((const char *)UART3_BUFFER,size);
-		robo_detaillog(5,0,"%s",(const char *)UART3_BUFFER);
+		//robo_detaillog(5,0,"%s",(const char *)UART3_BUFFER);
 		if(!content_.parse.error){
 			if( strcmp(content_.cmd,"STATUS") == 0 ){
 				send_status();
 			}else			if( strcmp(content_.cmd,"ARM") == 0 ){
 				avatar::move_to(content_.point_);
+				send_status();
 			} else if( strcmp(content_.cmd,"CALIBRATE") == 0 ){				
 				avatar::calibrate();
+				send_status();
 			} else if( strcmp(content_.cmd,"STOP") == 0 ){				
 				avatar::stop();
+				send_status();
 			} else    if( strcmp(content_.cmd,"SHUTDOWN") == 0 ){	
 				avatar::shutdown();					
+				send_status();
 			} else  if( strcmp(content_.cmd,"RESET") == 0 ){	
 				avatar::reset();					
+				send_status();
 			} else if( strcmp(content_.cmd,"POWER_OFF") == 0 ){	
 				avatar::power_off();					
+				send_status();
+			} else if( strcmp(content_.cmd,"CONFIG") == 0 ){	
+				send_config();					
 			} else if( strcmp(content_.cmd,"POWER_ON") == 0 ){	
 				avatar::power_on();					
+				send_status();
 			} else  if( strcmp(content_.cmd,"REBOOT") == 0 ){	
 					IWDG->KR = 0xCCCC; /* (1) */
 					IWDG->KR = 0x5555; /* (2) */
@@ -1321,14 +1476,13 @@ void command_poll(void){
 					while(IWDG->SR); /* (5) */
 			}
 		}
-		send_status();
 	}
 	else{
 		static robo::time_ms_t prev = 0;
 		robo::time_ms_t ms = robo::system::env::time_ms();
 		if( ms - prev > 1000 ){
 			prev = ms;
-			send_status();
+			//send_status();
 		}
 	}
 }
