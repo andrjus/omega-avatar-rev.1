@@ -5,7 +5,7 @@ import time
 #                    parity=serial.PARITY_EVEN, rtscts=1)
 
 
-with serial.Serial('COM16', 9600,
+with serial.Serial('COM16', 115200,
     timeout=10, rtscts=1) as ser:
     print(ser)
     while True:

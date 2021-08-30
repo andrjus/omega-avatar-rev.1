@@ -62,8 +62,9 @@ namespace avatar{
 				} rot;
 				float fingers[5];
 			};
-			float values[11];
+			float human[11];
 		};
+		float actuator[8];
 	};
 	
 	struct coordDesc{
@@ -119,5 +120,6 @@ namespace avatar{
 	void led_on(void);
 	void led_off(void);
 	void query_config(coordDescs & _coordDescs);
+	void set_speed_limit(float * _speed_limits);
 }
 #endif

@@ -68,6 +68,7 @@ namespace robo{
 				,RCTR_U( POSITION_TRAJECTORY,    140, 4)  
 				,RCTR_U( PRESENT_INPUT_VOLTAGE,  144, 2)
 				,RCTR_U( PRESENT_TEMPERATURE,    146, 1)
+				,RCTR_U( REBOOT_FLAG,    224, 1)
 				,{ RT("PRESENT"), RT("snapshot") , 124, 12}
 			};
 			

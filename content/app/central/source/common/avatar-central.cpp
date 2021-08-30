@@ -54,6 +54,8 @@ namespace avatar{
 
 			virtual void power_off(void) = 0;
 			virtual robo::result do_shutdown(void) = 0;
+			
+			virtual void set_speed_limit(float _speed_limit) = 0;
 		};
 		class actuator : public ::robo::backend::idevagent, public idev {
 		protected:
@@ -125,6 +127,26 @@ namespace avatar{
 					};
 				};
 			};
+			friend class reboot_stream;
+			class reboot_stream : public idevagent:: stream{
+				friend class Dynamixel;
+				Dynamixel & dynamixel_;
+				bool reboot_need_ = true;
+			public:
+				virtual query_result query(robo_tran_p _tran){
+					_tran->request=	ROBO_TRAN_REBOOT_ME;
+					return query_result::success;
+				}
+				virtual void confirm(robo_tran_p _tran){
+					if(_tran->status == ROBO_TRAN_COMPLETE){
+						reboot_need_ = false;
+						dynamixel_.start_configure();
+					} 
+				}
+				virtual bool exchange_need() { return reboot_need_; }
+				reboot_stream(Dynamixel & _owner): idevagent::stream(_owner,priority::hi ), dynamixel_(_owner){}
+			} reboot_stream_;
+
 			
 			::robo::backend::contrltable  contrltable_;
 			::robo::backend::contrltable::var<snapshot_s> snapshot_;
@@ -144,12 +166,15 @@ namespace avatar{
 			uint32  home_offset_;
 			uint8 bitrate_;
 			uint16 pwm_limit_;
+			uint8 reboot_flag_;
+			enum{ reboot_flag__=0x77};
+			bool reboot_need_ = true;
 			void startup_confirm__( ::robo::frontend::contrltable::ivar& _var, bool _result){
 				if(_result){
 					if( 
 						contrltable_.ready()
 					){
-
+				
 						if( bitrate_.value() == 1){
 							bitrate_.post(3);
 						}
@@ -162,9 +187,18 @@ namespace avatar{
 						if( id_.value()==new_addr ){
 							idevagent::dev_set_id(new_addr);
 						}
+						
+						if( reboot_need_ &&reboot_flag_.value() != 0 ){
+							//todo что делать????
+							reboot_stream_.reboot_need_  =  true;
+							return;
+						} else {
+							reboot_need_ = false;
+						}
+						//if(ystem:;env::time_us() - reboot_tm_>10000){
+						//}
 
-						//if ( power_.try_post(1, startup_confirm_)  != robo::result::complete ) return ;
-						//if ( required_position_.try_post(2000/*, startup_confirm_*/) != robo::result::complete ) return ;
+						if ( reboot_flag_.try_post(reboot_flag__, startup_confirm_)  != robo::result::complete ) return ;
 
 						if ( power_.try_post(0, startup_confirm_)  != robo::result::complete ) return ;
 						
@@ -228,7 +262,7 @@ namespace avatar{
 				: actuator (_name, _owner)
 				, contrltable_(
 					*this
-					, ::robo::backend::contrltable::priority::hi
+					, ::robo::backend::contrltable::priority::normal
 					, 1
 					, ::robo::backend::dynamixel::records_xm
 					, (sizeof( ::robo::backend::dynamixel::records_xm ) / sizeof(::robo::frontend::contrltable::record))  
@@ -252,6 +286,8 @@ namespace avatar{
 				, home_offset_(contrltable_,"HOMING_OFFSET")
 				, bitrate_(contrltable_,"BAUD_RATE")
 				, pwm_limit_(contrltable_,"PWM_LIMIT")
+				, reboot_flag_(contrltable_,"REBOOT_FLAG")
+				, reboot_stream_(*this)
 			{
 			}
 			
@@ -282,7 +318,7 @@ namespace avatar{
 			}*/
 
 			virtual void start_configure(void){
-				
+//				ROBO_ALARMN(bus
 				ROBO_ALARMN(contrltable_.query(startup_confirm_));
 			}
 			virtual robo::result do_configure(void){
@@ -663,6 +699,10 @@ uint32_t dinamyxel_p2_encode_param(
 	, uint8_t * _msg
 );
 
+uint32_t dinamyxel_p2_encode_reboot(
+	uint8_t  _id
+	, uint8_t * _msg
+);
 	
 namespace avatar {
 
@@ -744,28 +784,37 @@ namespace avatar {
 				wait_len_ = 4;
 				channel_.exchange(out_buffer,sz, &(in_buffer[0]),11,&confirm_delegat);
 			} else {
-				union{
-					struct{
-						uint16_t addr;
-						uint16_t len;
+				if( _msg->tran.request == ROBO_TRAN_REBOOT_ME ){
+					uint32_t sz = dinamyxel_p2_encode_reboot(
+						_msg->address
+						, out_buffer
+					);
+					wait_len_ = 4;
+					channel_.exchange(out_buffer,sz, &(in_buffer[0]),11,&confirm_delegat);					
+				}else {
+					union{
+						struct{
+							uint16_t addr;
+							uint16_t len;
+						};
+						uint8_t memo[4];
 					};
-					uint8_t memo[4];
-				};
-				addr = _msg->suba;
-				len = _msg->tran.size_actual;
-				
-				uint32_t sz = dinamyxel_p2_encode(
-					_msg->address
-					, 0x02
-					, memo
-					, 4
-					, out_buffer
-				);
-	
-				in_buffer[7] = 0;
-				in_buffer[8] = 0xff;
-				wait_len_ = 4+len;
-				channel_.exchange(out_buffer,sz, &(in_buffer[0]),11+len,&confirm_delegat);
+					addr = _msg->suba;
+					len = _msg->tran.size_actual;
+					
+					uint32_t sz = dinamyxel_p2_encode(
+						_msg->address
+						, 0x02
+						, memo
+						, 4
+						, out_buffer
+					);
+		
+					in_buffer[7] = 0;
+					in_buffer[8] = 0xff;
+					wait_len_ = 4+len;
+					channel_.exchange(out_buffer,sz, &(in_buffer[0]),11+len,&confirm_delegat);
+				} 
 			}
 			return true;
 		}				
@@ -794,9 +843,6 @@ namespace avatar {
 	public:
 		dynamixel_bus(  robo::cstr _name, robo::net::master & _channel  );
 		/*void reboot(void){
-			enum{sz = }
-			static uint8_t cmd[] = {0xFF,	0xFF,	0xFD,	0x00,	0x01,	0x03,	0x00,	0x08,	0xFF,	0xFF};
-				channel_.exchange(out_buffer,sz, &(in_buffer[0]),11,&confirm_delegat);
 		}*/
 	};
 	
@@ -1196,6 +1242,8 @@ namespace avatar {
 						//V0 += human_actual_speed_[i]*norm[i];
 					}		
 					const float Vmax = 100.f;
+					
+					
 					float dt = mro/Vmax;
 					if( dt > T ){
 						dt=T;
@@ -1222,6 +1270,9 @@ namespace avatar {
 						}
 						step = V0*dt - Amax*dt*dt/2;						
 					}*/
+					/*
+
+					*/
 					for(int i=0;i<3;++i){
 						human_deseired_[i] = human_deseired_[i] + step*norm[i];
 					}
@@ -1233,6 +1284,7 @@ namespace avatar {
 					}
 				}
 				human_to_actuator(&human_deseired_[0], &actuator_req_[0],&actuator_actual_[0]);
+				
 				set_req_position();
 				update_control();
 				led_off();
@@ -1536,13 +1588,20 @@ namespace avatar {
 		void move_to_(const point & _point){
 			if(mode_ != mode::off){
 				robo::system::guard g__;
-				std::copy_n(_point.values,7,human_req_);
+				std::copy_n(_point.human,7,human_req_);
 				//todo бытлокод
 				human_req_[7] = human_req_[6];
 				command_ = command::moving;
 			}
 		}
-		
+		void set_speed_limit_(float * _speed_limits){
+			if(mode_ != mode::off){
+				actuator ** a =actuators;
+				for( int i = 0; i< count;++i,++_speed_limits, ++a){
+					(*a)->set_speed_limit(*_speed_limits);
+				}
+			}
+		}
 		void start_calibrate_(void){
 			command_ = command::calibrate;			
 		}
@@ -1604,7 +1663,8 @@ namespace avatar {
 			{
 				robo::system::guard g__;
 				tmp = mode_;
-				std::copy_n(human_actual_,7,_status.pt.values);
+				std::copy_n(human_actual_,7,_status.pt.human);
+				std::copy_n(actuator_actual_,8,_status.pt.actuator);				
 			}
 			_status.state = statesToInt(tmp);
 		}
@@ -1629,7 +1689,7 @@ namespace avatar {
 				d->actual = *a++;		d++;
 
 				d->caption = "Y";
-				d->range.actual.min = d->range.required.min = -600.f;
+				d->range.actual.min = d->range.required.min = -100.f;
 				d->range.actual.max = d->range.required.max = 600.f;
 				d->actual = *a++;		d++;
 
@@ -1721,6 +1781,9 @@ namespace avatar {
 		}
 		static void query_config(coordDescs & _coordDescs){
 			instance().query_config_(_coordDescs);
+		}
+		static void set_speed_limit(float * _speed_limits){
+			instance().set_speed_limit_(_speed_limits);
 		}
 	};
 	
@@ -1902,6 +1965,21 @@ uint32_t dinamyxel_p2_encode_param(
 		, _msg
 	);
 }
+
+uint32_t dinamyxel_p2_encode_reboot(
+	uint8_t  _id
+	, uint8_t * _msg
+){
+	return dinamyxel_p2_encode(
+		_id 
+		, 0x08
+		, nullptr
+	  , 0
+		, _msg
+	);
+}
+
+
 void avatar::move_to(const avatar::point & _point){
 	module::move_to(_point);
 }
@@ -1917,6 +1995,10 @@ void avatar::query_status(avatar::status & _status){
 
 void avatar::query_config(coordDescs & _coordDescs){
 	module::query_config(_coordDescs);
+}
+
+void avatar::set_speed_limit(float * _speed_limits);
+	module::set_speed_limit(_speed_limits);
 }
 
 void avatar::reset(void){
@@ -2021,7 +2103,18 @@ void avatar::module::actuator_to_human(float * _actuator, float * _human){
 
 	}
 
+float angle_diff(float _a1, float _a2){
+	float tmp =_a1 - _a2;
+	if (tmp>pi) tmp-=2*pi;
+	if (tmp<-pi) tmp+=2*pi;
+	return tmp;
+}
 
+float angle_err(float _a1, float _a2){
+	float tmp = angle_diff(_a1,_a2);
+	float tmp2 = _a1-pi/2;
+	return tmp*tmp + _a1- tmp2*tmp2;
+}
 void avatar::module::human_to_actuator(float * _human, float * _actuator, float * _prev){
 //		led_on();
 	float xg =_human[0];
@@ -2064,7 +2157,20 @@ void avatar::module::human_to_actuator(float * _human, float * _actuator, float 
 	
 	Y = Y - dY;
 	
-	if(Y>pi) Y -= 2*pi; else if(Y<-pi) Y += 2*pi;
+	//if(Y>pi) Y -= 2*pi; else if(Y<-pi) Y += 2*pi;
+	float cos_P =cos(P);
+	/*float ramp = cos_P*cos_P;
+	
+	
+	float Ymax = pi/2*(1-ramp);
+	if (Y>Ymax){
+		Y = Ymax;
+	} else {
+		if(Y<-Ymax){
+			Y = -Ymax;
+		}
+	}
+	*/
 
 	/*
 [          cos(q4),                           sin(q4)*sin(q5),                             cos(q5)*sin(q4)]
@@ -2084,14 +2190,16 @@ A2 =
 
 	float cos_Y =cos(Y);
 	float sin_Y =sin(Y);
-	float cos_P =cos(P);
 	float sin_P =sin(P);
 	float cos_R =cos(R);
 	float sin_R =sin(R);
 
 //первый вариант
 
-  q4= acos(cos_P*cos_Y);
+	float prev3 = _prev[3]/gain;
+	float prev4 = _prev[4]/gain;
+	float prev5 = _prev[5]/gain;
+	q4= acos(cos_P*cos_Y);
 	if (P>=0) {
 		q4 = -q4;
 	}
@@ -2102,10 +2210,11 @@ A2 =
 		if( sin_q4 < -eps ){
 			q3 = atan2(-cos_P * sin_Y, sin_P );
 		} else {
-			q3 = _prev[3]/gain;
+			q3 = prev3;
 		}
 	}
 
+  
 	if( abs(sin_q4) > eps ){
 		float dx = sin_R*sin_Y - cos(R)*cos_Y*sin_P;
 		float dy = -cos_R * sin_Y - cos_Y*sin_P*sin_R;
@@ -2116,6 +2225,14 @@ A2 =
 		q5 = atan2(  dy , dx );
 	}else{
 		q5 = R - q3;
+	}
+
+	if( abs(q3-prev3) > pi/2 ){
+		if( abs(q4) > 3.f/57 ){
+			q3 = prev3;
+			q4=prev4;
+			q5=prev5;
+		}
 	}
 	
 	_actuator[0] = _human[2];

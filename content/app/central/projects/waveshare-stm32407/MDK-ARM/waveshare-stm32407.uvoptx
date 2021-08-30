@@ -410,6 +410,16 @@
           <WinNumber>1</WinNumber>
           <ItemText>current_limit,0x0A</ItemText>
         </Ww>
+        <Ww>
+          <count>3</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>human_deseired_</ItemText>
+        </Ww>
+        <Ww>
+          <count>4</count>
+          <WinNumber>1</WinNumber>
+          <ItemText>actuator_req_</ItemText>
+        </Ww>
       </WatchWindow1>
       <WatchWindow2>
         <Ww>

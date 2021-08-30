@@ -56,7 +56,7 @@ void transport_poll(void);
 transport_buffer * transport_buffer_query(void){
 	if( robo::system::env::is_frontend() ){
 		int cnt = 0;
-/*		do{
+		do{
 			{
 				robo::system::guard g__;
 				cnt = transport_buffers_pool_.count();
@@ -65,8 +65,8 @@ transport_buffer * transport_buffer_query(void){
 				HAL_PCD_IRQHandler(&hpcd_USB_OTG_FS);
 			}
 			transport_poll();
-		} while(cnt<1);*/
-	} 
+		} while(cnt<1);
+	}
 	robo::system::guard g__;
 	if(transport_buffers_pool_.count()>0){
 		transport_buffer * ret = transport_buffers_pool_.get();
@@ -912,6 +912,7 @@ bool build_default_ini_(void){
 		"speed_max=200\n"
 		"position_converter=\"avatar/yaw-2_position_co\"\n"
 		"homing_ofset=0\n"		
+		"pwm_limit=885\n"		
 
 		"[yaw-3]\n"
 		"BOARD_DEV_ID=1\n"
@@ -926,6 +927,7 @@ bool build_default_ini_(void){
 		"speed_max=200\n"
 		"position_converter=\"avatar/yaw-3_position_co\"\n"
 		"homing_ofset=0\n"		
+		"pwm_limit=885\n"		
 
 		
 		"[roll-4]\n"
@@ -938,9 +940,10 @@ bool build_default_ini_(void){
 		"ENABLED=1\n"		
 		"calibrate_position=0\n"
 		"position_dead_zone=2\n"
-		"speed_max=600\n"
+		"speed_max=120\n"
 		"position_converter=\"avatar/roll-4_position_co\"\n"
 		"homing_ofset=0\n"		
+		"pwm_limit=885\n"		
 
 		"[pitch-5]\n"
 		"BOARD_DEV_ID=1\n"
@@ -952,9 +955,10 @@ bool build_default_ini_(void){
 		"ENABLED=1\n"		
 		"calibrate_position=0\n"
 		"position_dead_zone=2\n"
-		"speed_max=600\n"
+		"speed_max=120\n"
 		"position_converter=\"avatar/pitch-5_position_co\"\n"
 		"homing_ofset=0\n"		
+		"pwm_limit=885\n"		
 
 		"[roll-6]\n"
 		"BOARD_DEV_ID=1\n"
@@ -966,9 +970,10 @@ bool build_default_ini_(void){
 		"ENABLED=1\n"		
 		"calibrate_position=0\n"
 		"position_dead_zone=2\n"
-		"speed_max=600\n"
+		"speed_max=120\n"
 		"position_converter=\"avatar/roll-6_position_co\"\n"
 		"homing_ofset=0\n"		
+		"pwm_limit=885\n"		
 
 		"[grab-7]\n"
 		"BOARD_DEV_ID=1\n"
@@ -983,6 +988,7 @@ bool build_default_ini_(void){
 		"speed_max=60\n"
 		"position_converter=\"avatar/grab-7_position_co\"\n"
 		"homing_ofset=0\n"		
+		"pwm_limit=160\n"		
 
 		"[grab-8]\n"
 		"BOARD_DEV_ID=1\n"
@@ -997,6 +1003,7 @@ bool build_default_ini_(void){
 		"speed_max=60\n"
 		"position_converter=\"avatar/grab-8_position_co\"\n"
 		"homing_ofset=0\n"		
+		"pwm_limit=885\n"		
 
 		"[z-1]\n"
 		"BOARD_DEV_ID=1\n"
@@ -1011,6 +1018,7 @@ bool build_default_ini_(void){
 		"speed_max=350\n"
 		"position_converter=\"avatar/z-1_position_co\"\n"	
 		"homing_ofset=0\n"		
+		"pwm_limit=0\n"		
 	
 		"[fingers]\n"
 		"BOARD_DEV_ID=1\n"
@@ -1054,8 +1062,9 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
 			char key[key_sz];
 			bool is_rot = false;
 			bool is_pos = false;
-			bool is_finger = false;		
-			int finger_counter = 0;;
+			int finger_counter = 0;
+			int speed_limit_counter = 0;;
+			float speed_limit[6];
 		} parse;
 
 		char timestamp[key_sz];
@@ -1134,14 +1143,16 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
 
 				} else
 				if (strcmp(parse.key, "fingers") == 0) {
-					if (parse.finger_counter < 5) {
-						parse.is_finger = true;
-					}
-					else {
+					if (parse.finger_counter >= 5) {
 						parse.key[0] = 0;
-						parse.is_finger = false;
 					}
 					point_.fingers[parse.finger_counter++] = atof(s);
+				} else
+				if (strcmp(parse.key, "sl") == 0) {
+					if ( parse.speed_limit_counter >=8 ) {
+						parse.key[0] = 0;
+					}
+					parse.speed_limit[parse.speed_limit_counter++] = atof(s);
 				}
 			}
 
@@ -1215,8 +1226,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
 		parse.key[0] = 0;
 		parse.is_rot = false;
 		parse.is_pos = false;
-		parse.is_finger = false;		
 		parse.finger_counter = 0;
+		parse.speed_limit_counter = 0;
 		jsonsl_reset(parser);
 		jsonsl_feed(parser, _buf, _size);
 		
@@ -1258,7 +1269,6 @@ void send_status(void){
 				"\"timestamp\": \"%s\","
 				"\"data\": {"
 						"\"status\": \"%s\","
-						"\"description\": \"%s\","
 						"\"arm\": {"
 							 "\"arm\": %d,"
 							 "\"pos\": {"
@@ -1271,7 +1281,8 @@ void send_status(void){
 										"\"p\": %2.2f,"
 										"\"y\": %2.2f"
 							 "},"
-								"\"fingers\": [%2.2f, %2.2f, %2.2f, %2.2f, %2.2f]"
+								"\"fingers,\": [%2.2f, %2.2f, %2.2f, %2.2f, %2.2f]"
+								"\"actuators\": [%2.2f, %2.2f, %2.2f, %2.2f, %2.2f, %2.2f, %2.2f, %2.2f]"
 						"}"
 				"}"
 		"}\n"
@@ -1284,7 +1295,6 @@ void send_status(void){
 		,answer
 		, content_.timestamp
 		, status_names[no]
-		,	RT("We're moving! Dhat's funny!")
 		, 0 // arm
 		, status.pt.pos.x
 		, status.pt.pos.y
@@ -1297,6 +1307,14 @@ void send_status(void){
 		, status.pt.fingers[2]
 		, status.pt.fingers[3]
 		, status.pt.fingers[4]
+		, status.pt.actuator[0]
+		, status.pt.actuator[1]
+		, status.pt.actuator[2]
+		, status.pt.actuator[3]
+		, status.pt.actuator[4]
+		, status.pt.actuator[5]
+		, status.pt.actuator[6]
+		, status.pt.actuator[7]
 	);
 	HAL_UART_Transmit_DMA(&huart3, UART3_TX_BUFFER,sz);	
 }
@@ -1474,6 +1492,9 @@ void command_poll(void){
 					IWDG->PR = IWDG_PR_PR_1; /* (3) */
 					IWDG->RLR = 0xFFF; /* (4) */
 					while(IWDG->SR); /* (5) */
+			} else  if( strcmp(content_.cmd,"SET_SERVOS_LIMITS ") == 0 ){	
+				avatar::set_speed_limit(content_.parse.speed_limit);					
+				send_status();
 			}
 		}
 	}
