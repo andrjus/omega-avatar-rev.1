@@ -54,7 +54,7 @@ size_t UART3_ACTUAL_SIZE=0;
 bool UART3_ABORT = false;
 void transport_poll(void);
 transport_buffer * transport_buffer_query(void){
-	if( robo::system::env::is_frontend() ){
+	/*if( robo::system::env::is_frontend() ){
 		int cnt = 0;
 		do{
 			{
@@ -66,7 +66,7 @@ transport_buffer * transport_buffer_query(void){
 			}
 			transport_poll();
 		} while(cnt<1);
-	}
+	}*/
 	robo::system::guard g__;
 	if(transport_buffers_pool_.count()>0){
 		transport_buffer * ret = transport_buffers_pool_.get();
@@ -1281,7 +1281,7 @@ void send_status(void){
 										"\"p\": %2.2f,"
 										"\"y\": %2.2f"
 							 "},"
-								"\"fingers,\": [%2.2f, %2.2f, %2.2f, %2.2f, %2.2f]"
+								"\"fingers\": [%2.2f, %2.2f, %2.2f, %2.2f, %2.2f],"
 								"\"actuators\": [%2.2f, %2.2f, %2.2f, %2.2f, %2.2f, %2.2f, %2.2f, %2.2f]"
 						"}"
 				"}"

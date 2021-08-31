@@ -55,7 +55,7 @@ namespace avatar{
 			virtual void power_off(void) = 0;
 			virtual robo::result do_shutdown(void) = 0;
 			
-			virtual void set_speed_limit(float _speed_limit) = 0;
+			void set_speed_limit(float _speed_limit) {};
 		};
 		class actuator : public ::robo::backend::idevagent, public idev {
 		protected:
@@ -1997,7 +1997,7 @@ void avatar::query_config(coordDescs & _coordDescs){
 	module::query_config(_coordDescs);
 }
 
-void avatar::set_speed_limit(float * _speed_limits);
+void avatar::set_speed_limit(float * _speed_limits){
 	module::set_speed_limit(_speed_limits);
 }
 
